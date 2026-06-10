@@ -1,6 +1,6 @@
 # ◎ Obol
 
-**Measure, diagnose, and cut your LLM token spend — deterministic, local, free.**
+**Measure, diagnose, and cut your LLM token spend - deterministic, local, free.**
 
 ## Why it's different
 
