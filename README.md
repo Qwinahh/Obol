@@ -11,7 +11,7 @@ prove the answer didn't get worse.** For everyday users, across Claude Code, cha
 VS Code.
 
 It's **free and deterministic** because the analysis is math over a maintained technique
-catalog — no model is ever in the loop. That's the same property that makes it instant,
+catalog - no model is ever in the loop. That's the same property that makes it instant,
 private, and repeatable. The constraint is the moat.
 
 ## Status
