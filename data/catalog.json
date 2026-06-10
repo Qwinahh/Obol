@@ -1,0 +1,68 @@
+{
+  "version": "0.1.0",
+  "techniques": [
+    {
+      "id": "A1",
+      "name": "Prompt caching",
+      "tier": "A",
+      "wasteType": "input-reuse",
+      "savesSide": "input",
+      "autoApply": "amber",
+      "summary": "Cache stable, reused content (system prompt, tool defs, long docs). Cache reads cost ~10% of normal input — up to 90% off the reused portion."
+    },
+    {
+      "id": "A2",
+      "name": "Context editing",
+      "tier": "A",
+      "wasteType": "input-reuse",
+      "savesSide": "input",
+      "autoApply": "green",
+      "summary": "Auto-clear stale tool results as context fills. Anthropic's own 100-turn benchmark: 84% token savings with better task performance."
+    },
+    {
+      "id": "B1",
+      "name": "Trim the system prompt",
+      "tier": "B",
+      "wasteType": "input-unneeded",
+      "savesSide": "input",
+      "autoApply": "amber",
+      "summary": "A bloated system prompt is re-sent on every call. Trimming it compounds across the whole session."
+    },
+    {
+      "id": "B3",
+      "name": "Stop re-reading the same file",
+      "tier": "B",
+      "wasteType": "input-unneeded",
+      "savesSide": "input",
+      "autoApply": "amber",
+      "summary": "Re-reading a file already in context is double-paying. Common and expensive in coding workflows."
+    },
+    {
+      "id": "C1",
+      "name": "Concise output / length cap",
+      "tier": "C",
+      "wasteType": "output-verbose",
+      "savesSide": "output",
+      "autoApply": "green",
+      "summary": "Ask for concise output or set max_tokens. Output costs ~5x input, so each trimmed output token punches above its weight."
+    },
+    {
+      "id": "D1",
+      "name": "Model tiering",
+      "tier": "D",
+      "wasteType": "wrong-route",
+      "savesSide": "both",
+      "autoApply": "amber",
+      "summary": "Route simple work (classify, extract, format) to a cheaper/faster model; reserve the frontier model for hard reasoning."
+    },
+    {
+      "id": "D2",
+      "name": "Batch API",
+      "tier": "D",
+      "wasteType": "wrong-route",
+      "savesSide": "both",
+      "autoApply": "amber",
+      "summary": "50% off across models for non-urgent work, and it stacks with caching — combined savings can exceed 95%."
+    }
+  ]
+}

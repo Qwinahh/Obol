@@ -1,0 +1,21 @@
+{
+  "name": "obol",
+  "version": "0.0.1",
+  "description": "Obol — measure, diagnose, and cut your LLM token spend. Deterministic, local, free.",
+  "type": "commonjs",
+  "bin": { "obol": "dist/cli.js" },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "node scripts/bundle-plugin.js",
+    "bundle": "node scripts/bundle-plugin.js",
+    "start": "node dist/cli.js",
+    "dev": "tsc && node dist/cli.js"
+  },
+  "keywords": ["llm", "tokens", "claude", "cost", "optimization"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

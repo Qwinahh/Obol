@@ -1,0 +1,12 @@
+{
+  "version": "0.1.0",
+  "updated": "2026-06",
+  "unit": "USD per million tokens",
+  "note": "Estimates. Matched by substring of the model id. Cache write = 5-min rate (1.25x input); cache read = 0.1x input.",
+  "models": [
+    { "match": "opus",   "input": 5, "output": 25, "cacheWrite": 6.25, "cacheRead": 0.5 },
+    { "match": "sonnet", "input": 3, "output": 15, "cacheWrite": 3.75, "cacheRead": 0.3 },
+    { "match": "haiku",  "input": 1, "output": 5,  "cacheWrite": 1.25, "cacheRead": 0.1 }
+  ],
+  "default": { "input": 3, "output": 15, "cacheWrite": 3.75, "cacheRead": 0.3 }
+}

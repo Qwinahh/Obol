@@ -1,0 +1,17 @@
+{
+  "name": "obol",
+  "owner": {
+    "name": "Quin"
+  },
+  "metadata": {
+    "description": "Obol — measure, diagnose, and cut your Claude Code token spend. Deterministic, local, free.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "obol",
+      "source": "./plugin",
+      "description": "Run /obol:optimize for measured cache receipts + a ranked, costed fix list. A re-read guard hook warns when a file already in context gets re-read. Local, zero-token."
+    }
+  ]
+}
