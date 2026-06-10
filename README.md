@@ -2,9 +2,6 @@
 
 **Measure, diagnose, and cut your LLM token spend — deterministic, local, free.**
 
-An obol was the smallest coin of the ancient Greek world: the single tiny unit of
-currency you actually spent. A token is an obol. Obol watches where yours go.
-
 ## Why it's different
 
 Most tools either *just show you a number* (ccusage and the usage monitors) or are
