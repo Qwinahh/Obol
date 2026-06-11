@@ -16,3 +16,11 @@ plugin/package.json
 
 # Obol-generated review doc
 obol-apply.md
+
+# FUSE mount artifacts (never commit)
+.fuse_hidden*
+
+# VS Code extension bundled artifacts (produced by bundle-plugin.js)
+editor/dist/
+editor/data/
+editor/*.vsix

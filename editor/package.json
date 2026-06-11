@@ -1,0 +1,22 @@
+{
+  "name": "obol",
+  "displayName": "Obol — Token Optimizer",
+  "description": "Measure, diagnose, and cut your Claude Code token spend — deterministic, local, free. No API key, no tokens spent.",
+  "version": "0.0.1",
+  "publisher": "qwinahh",
+  "license": "MIT",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Other", "Visualization"],
+  "keywords": ["claude", "tokens", "cost", "llm", "optimization"],
+  "repository": { "type": "git", "url": "https://github.com/Qwinahh/Obol" },
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      { "command": "obol.optimize", "title": "Analyze My Token Usage", "category": "Obol" },
+      { "command": "obol.demo", "title": "Open Demo Report", "category": "Obol" },
+      { "command": "obol.apply", "title": "Apply Safe Fixes (reversible)", "category": "Obol" },
+      { "command": "obol.terminal", "title": "Run in Terminal (full UI)", "category": "Obol" }
+    ]
+  }
+}

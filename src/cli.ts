@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 import { loadCatalog, autoApplyBreakdown } from "./core/catalog";
 import { readUsage } from "./core/usage";
+import { demoUsage } from "./core/demo";
 import { diagnose } from "./core/diagnose";
 import { proof } from "./core/proof";
 import { planApply, applyGreen, renderPlanMarkdown } from "./core/apply";
+import { planGuard, runGuard, anthropicCaller, shortModel } from "./core/guard";
+import { fingerprint } from "./core/fingerprint";
+import { recommend } from "./core/recommend";
+import { buildReport } from "./core/report";
 import type { UsageSummary, Diagnosis } from "./core/types";
 import type { Proof } from "./core/proof";
 import type { ApplyPlan, AppliedResult } from "./core/apply";
+import type { GuardPlan, GuardVerdict } from "./core/guard";
+import type { NextStep } from "./core/recommend";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -34,7 +41,8 @@ function usageReport(u: UsageSummary): void {
   if (!u.found) {
     console.log("  " + c.amber("No Claude Code logs found.") + c.dim("  looked in:"));
     for (const p of u.searchedPaths) console.log("    " + c.dim("· " + p));
-    console.log("\n  " + c.dim("logs elsewhere? run:  ") + c.cyan("obol <path-to/projects>") + "\n");
+    console.log("\n  " + c.dim("logs elsewhere? run:  ") + c.cyan("obol <path-to/projects>"));
+    console.log("  " + c.dim("just kicking the tyres? run:  ") + c.cyan("obol --demo") + "\n");
     return;
   }
 
@@ -44,7 +52,8 @@ function usageReport(u: UsageSummary): void {
     c.dim("   ·   ") + c.bold(tok(u.totalTokens)) + c.dim(" tokens") +
     c.dim("   ·   ") + c.bold(String(u.sessions)) + c.dim(" sessions")
   )) console.log("  " + l);
-  console.log("  " + c.dim("  " + span) + "\n");
+  const tag = u.source === "demo://synthetic-usage" ? c.magenta("  demo data") : "";
+  console.log("  " + c.dim("  " + span) + tag + "\n");
 
   // composition — where the tokens live
   const { line, legend } = stackedBar([
@@ -80,6 +89,15 @@ function usageReport(u: UsageSummary): void {
   }
 }
 
+/* --------------------------- fingerprint -------------------------- */
+function fingerprintReport(u: UsageSummary): void {
+  const f = fingerprint(u);
+  const col = f.score >= 80 ? c.green : f.score >= 55 ? c.amber : c.red;
+  console.log("  " + c.dim("fingerprint  ") + col(c.bold(f.traits.join(" · "))) +
+    c.dim("   efficiency ") + col(c.bold(`${f.score}/100`)) + col(` ${f.grade}`));
+  console.log("  " + bar(f.score, 100, 28, col) + c.dim("   share me ↑") + "\n");
+}
+
 /* ----------------------------- proof ------------------------------ */
 function proofReport(p: Proof): void {
   if (!p.hasCacheReceipt) return;
@@ -105,7 +123,7 @@ function diagnosisReport(d: Diagnosis, totalSpend: number): void {
     console.log("  " + c.bold("Estimated savings  ") +
       c.green(c.bold("up to " + usd(d.totalEstSaveUSD))) +
       c.dim(`  (~${Math.round(d.totalEstSavePct)}% of ${usd(totalSpend)})`));
-    console.log("  " + c.dim("estimates — Step 3 receipts prove them; the Quality Guard will protect them."));
+    console.log("  " + c.dim("estimates — Step 3 receipts prove them; the Quality Guard protects them."));
   }
   console.log("");
 
@@ -163,47 +181,139 @@ function applyReport(plan: ApplyPlan, applied: AppliedResult[] | null): void {
   }
 }
 
+/* --------------------------- recommend ---------------------------- */
+function recommendReport(steps: NextStep[]): void {
+  if (steps.length === 0) return;
+  console.log("  " + c.bold("Do this next") + c.dim("  — biggest, easiest wins first") + "\n");
+  for (const s of steps) {
+    const col = s.tier === "green" ? c.green : c.amber;
+    const save = s.estSaveUSD > 0 ? c.green("up to " + usd(s.estSaveUSD)) : c.dim("—");
+    const head = "  " + col(c.bold(`${s.rank}. ${s.title}`)) + c.dim("  " + s.effort);
+    const gap = Math.max(2, WIDTH - visLen(head) - visLen(save));
+    console.log(head + " ".repeat(gap) + save);
+    console.log("     " + c.dim(s.detail) + "\n");
+  }
+}
+
+/* ------------------------------ guard ----------------------------- */
+function guardReport(plan: GuardPlan, verdicts: GuardVerdict[] | null): void {
+  if (plan.probes.length === 0) return;
+  console.log("  " + RULE + "\n");
+  console.log("  " + c.bold("Quality Guard") + c.dim("  — prove a fix didn't make answers worse") + "\n");
+
+  // provably-safe fixes pass for free
+  for (const p of plan.safe) {
+    console.log("  " + c.green("✓ ") + c.bold(p.title) + c.dim(`  ${p.techniqueId}`) +
+      c.green("  proven safe · $0"));
+    console.log("    " + c.dim(p.rationale) + "\n");
+  }
+
+  const verdictFor = new Map((verdicts ?? []).map((v) => [v.techniqueId, v]));
+
+  for (const p of plan.replay) {
+    const v = verdictFor.get(p.techniqueId);
+    if (v && v.ran) {
+      const ok = v.passed;
+      const mark = ok ? c.green("✓ ") : c.red("✗ ");
+      const tagc = ok ? c.green : c.red;
+      console.log("  " + mark + c.bold(p.title) + c.dim(`  ${p.techniqueId}`) +
+        tagc(`  ${Math.round(v.score * 100)}% canaries held`));
+      console.log("    " + c.dim(v.note) + "\n");
+    } else if (v && !v.ran) {
+      console.log("  " + c.amber("! ") + c.bold(p.title) + c.dim(`  ${p.techniqueId}`) +
+        c.amber("  guard couldn't run"));
+      console.log("    " + c.dim(v.note) + "\n");
+    } else {
+      console.log("  " + c.amber("○ ") + c.bold(p.title) + c.dim(`  ${p.techniqueId}`) +
+        c.dim(`  needs a canary check · est `) + c.amber(gcost(p.estCostUSD)));
+      console.log("    " + c.dim(p.rationale) + "\n");
+    }
+  }
+
+  for (const p of plan.manual) {
+    console.log("  " + c.dim("· ") + c.bold(p.title) + c.dim(`  ${p.techniqueId}  —  ${p.rationale}`) + "\n");
+  }
+
+  // the one paid path, explained honestly
+  if (plan.replay.length && !verdicts) {
+    if (plan.hasKey) {
+      console.log("  " + c.dim("run  ") + c.cyan("obol --guard") +
+        c.dim(`   to verify the routing fixes live (~${gcost(plan.estCostUSD)}, your key, tiny prompts)`) + "\n");
+    } else {
+      console.log("  " + c.dim("the guard's live check is the one feature that spends tokens — it's off by default."));
+      console.log("  " + c.dim("set ") + c.cyan("ANTHROPIC_API_KEY") + c.dim(" and run ") +
+        c.cyan("obol --guard") + c.dim(` to run it (~${gcost(plan.estCostUSD)}). everything above stayed $0.`) + "\n");
+    }
+  }
+}
+
+const gcost = (n: number) => (n <= 0 ? "$0.00" : n < 0.01 ? "<$0.01" : usd(n));
 const shortPath = (p: string) => {
   const parts = p.replace(/\\/g, "/").split("/");
   return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : p;
 };
 
 /* ------------------------------ args ------------------------------ */
-function parseArgs(argv: string[]): { dir?: string; write: boolean; plan: boolean } {
-  let dir: string | undefined;
-  let write = false;
-  let plan = false;
-  for (const a of argv) {
-    if (a === "--apply" || a === "-a") write = true;
-    else if (a === "--plan" || a === "-p") plan = true;
-    else if (!a.startsWith("-")) dir = a;
+interface Args { dir?: string; write: boolean; plan: boolean; demo: boolean; guard: boolean; json: boolean; }
+function parseArgs(argv: string[]): Args {
+  const a: Args = { write: false, plan: false, demo: false, guard: false, json: false };
+  for (const arg of argv) {
+    if (arg === "--apply" || arg === "-a") a.write = true;
+    else if (arg === "--plan" || arg === "-p") a.plan = true;
+    else if (arg === "--demo" || arg === "-d") a.demo = true;
+    else if (arg === "--guard" || arg === "-g") a.guard = true;
+    else if (arg === "--json" || arg === "-j") a.json = true;
+    else if (!arg.startsWith("-")) a.dir = arg;
   }
-  return { dir, write, plan };
+  return a;
 }
 
 /* ------------------------------ run ------------------------------- */
-const { dir, write, plan: wantDoc } = parseArgs(process.argv.slice(2));
-const usage = readUsage(dir);
+async function main(): Promise<void> {
+  const { dir, write, plan: wantDoc, demo, guard: wantGuard, json } = parseArgs(process.argv.slice(2));
+  const usage = demo ? demoUsage() : readUsage(dir);
 
-banner();
-rulesLine();
-usageReport(usage);
-if (usage.found) {
+  // --json: emit the full report as machine-readable data (used by the VS Code
+  // extension and anyone scripting Obol). Still 100% deterministic + zero-token.
+  if (json) {
+    process.stdout.write(JSON.stringify(buildReport(usage, pkg.version), null, 2) + "\n");
+    return;
+  }
+
+  banner();
+  rulesLine();
+  usageReport(usage);
+  if (!usage.found) return;
+
+  fingerprintReport(usage);
   console.log("  " + RULE + "\n");
   proofReport(proof(usage));
+
   const d = diagnose(usage);
   diagnosisReport(d, usage.totalCostUSD);
 
-  const plan = planApply(d, usage);
-  const applied = write ? applyGreen(plan) : null;
-  applyReport(plan, applied);
+  const applyPlan = planApply(d, usage);
+  const applied = write ? applyGreen(applyPlan) : null;
+  applyReport(applyPlan, applied);
+
+  recommendReport(recommend(d, applyPlan));
+
+  // Step 4 — the Quality Guard. Plan is always free. The live check is opt-in.
+  const gplan = planGuard(applyPlan, usage);
+  let verdicts: GuardVerdict[] | null = null;
+  if (wantGuard && gplan.hasKey && gplan.replay.length) {
+    verdicts = await runGuard(gplan, anthropicCaller(process.env.ANTHROPIC_API_KEY as string));
+  }
+  guardReport(gplan, verdicts);
 
   // --plan or --apply: write the full, copy-pasteable review doc next to you.
-  if ((write || wantDoc) && plan.actions.length) {
+  if ((write || wantDoc) && applyPlan.actions.length) {
     const docPath = join(process.cwd(), "obol-apply.md");
     try {
-      writeFileSync(docPath, renderPlanMarkdown(plan, applied), "utf8");
+      writeFileSync(docPath, renderPlanMarkdown(applyPlan, applied), "utf8");
       console.log("  " + c.dim("full review doc → ") + c.cyan(shortPath(docPath)) + "\n");
     } catch { /* best-effort */ }
   }
 }
+
+main().catch((e) => { console.error(e); process.exit(1); });

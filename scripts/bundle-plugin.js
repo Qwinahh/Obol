@@ -1,30 +1,39 @@
 #!/usr/bin/env node
-// Make plugin/ self-contained so Claude Code's install-copy carries everything.
-// Claude Code copies the plugin directory to a cache; references to ../dist would
-// break. So we copy the built CLI (dist/), the rules data (data/), and package.json
-// *into* the plugin, preserving the dist/core -> ../../data layout and the
-// dist/cli.js -> ../package.json version read that the CLI does at runtime.
+// Make the plugin/ and editor/ surfaces self-contained so each can be copied
+// (Claude Code's install-copy; a packaged .vsix) and still find the built CLI,
+// the rules data, and the version string at runtime — no references to ../dist.
 const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const plugin = path.join(root, "plugin");
 
-function copyDir(from, to) {
-  fs.rmSync(to, { recursive: true, force: true });
-  fs.cpSync(from, to, { recursive: true });
+// Overwrite-in-place copy. We try a clean wipe first, but some filesystems
+// (network/mounted drives) reject the recursive unlink with EPERM — so we fall
+// back to copying over the top, which never deletes and always succeeds.
+function syncDir(from, to) {
+  try { fs.rmSync(to, { recursive: true, force: true }); } catch { /* EPERM on some mounts — copy over instead */ }
+  fs.cpSync(from, to, { recursive: true, force: true });
 }
 
 for (const dir of ["dist", "data"]) {
-  const from = path.join(root, dir);
-  if (!fs.existsSync(from)) {
+  if (!fs.existsSync(path.join(root, dir))) {
     console.error(`bundle-plugin: missing ${dir}/ — run the build first.`);
     process.exit(1);
   }
-  copyDir(from, path.join(plugin, dir));
 }
 
-// cli.js does require("../package.json") for its version string.
+// Claude Code plugin: dist/ + data/ + a package.json (cli.js reads its version).
+const plugin = path.join(root, "plugin");
+syncDir(path.join(root, "dist"), path.join(plugin, "dist"));
+syncDir(path.join(root, "data"), path.join(plugin, "data"));
 fs.copyFileSync(path.join(root, "package.json"), path.join(plugin, "package.json"));
 
-console.log("bundle-plugin: plugin/dist, plugin/data, plugin/package.json refreshed.");
+// VS Code extension: dist/ + data/. The extension keeps its OWN package.json
+// (the manifest), which already carries a version field for cli.js to read.
+const editor = path.join(root, "editor");
+if (fs.existsSync(editor)) {
+  syncDir(path.join(root, "dist"), path.join(editor, "dist"));
+  syncDir(path.join(root, "data"), path.join(editor, "data"));
+}
+
+console.log("bundle-plugin: plugin + editor (dist, data) refreshed.");
