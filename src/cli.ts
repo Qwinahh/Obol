@@ -8,7 +8,12 @@ import { planApply, applyGreen, renderPlanMarkdown } from "./core/apply";
 import { planGuard, runGuard, anthropicCaller, shortModel } from "./core/guard";
 import { fingerprint } from "./core/fingerprint";
 import { recommend } from "./core/recommend";
+import { resolveProfile, filterDiagnosis, PRESETS, type ProfileId } from "./core/profile";
+import { recordRun, summarize, loadHistory, demoHistory } from "./core/history";
+import type { HistorySummary } from "./core/history";
 import { buildReport } from "./core/report";
+import { shareCard } from "./core/sharecard";
+import { loadIdentity, setName, buildSubmission, signSubmission } from "./core/leaderboard";
 import type { UsageSummary, Diagnosis } from "./core/types";
 import type { Proof } from "./core/proof";
 import type { ApplyPlan, AppliedResult } from "./core/apply";
@@ -195,6 +200,19 @@ function recommendReport(steps: NextStep[]): void {
   }
 }
 
+function historyReport(h: HistorySummary): void {
+  if (!h || h.runs <= 0) return;
+  console.log("  " + c.bold("Savings history") + c.dim("  — local, on your machine only") + "\n");
+  const flame = h.currentStreak > 1 ? c.amber(`  ${h.currentStreak}-day streak`) : "";
+  const measured = c.green(usd(h.measuredSavedUSD)) + c.dim(" measured saved by caching");
+  console.log("  " + measured + flame);
+  if (h.appliedFixes > 0) {
+    console.log("  " + c.green(`${h.appliedFixes}`) + c.dim(` fix${h.appliedFixes > 1 ? "es" : ""} applied · `) +
+      c.green("~" + usd(h.appliedSaveUSD)) + c.dim(" locked in"));
+  }
+  console.log("  " + c.dim(`${h.runs} run${h.runs > 1 ? "s" : ""}${h.firstDate ? " since " + h.firstDate : ""} · longest streak ${h.longestStreak}d`) + "\n");
+}
+
 /* ------------------------------ guard ----------------------------- */
 function guardReport(plan: GuardPlan, verdicts: GuardVerdict[] | null): void {
   if (plan.probes.length === 0) return;
@@ -254,15 +272,24 @@ const shortPath = (p: string) => {
 };
 
 /* ------------------------------ args ------------------------------ */
-interface Args { dir?: string; write: boolean; plan: boolean; demo: boolean; guard: boolean; json: boolean; }
+interface Args { dir?: string; write: boolean; plan: boolean; demo: boolean; guard: boolean; json: boolean; profile?: ProfileId; card: boolean; name?: string; submit: boolean; leaderboard: boolean; }
 function parseArgs(argv: string[]): Args {
-  const a: Args = { write: false, plan: false, demo: false, guard: false, json: false };
-  for (const arg of argv) {
+  const a: Args = { write: false, plan: false, demo: false, guard: false, json: false, card: false, submit: false, leaderboard: false };
+  const isProfile = (v: string): v is ProfileId => v === "careful" || v === "balanced" || v === "aggressive";
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
     if (arg === "--apply" || arg === "-a") a.write = true;
     else if (arg === "--plan" || arg === "-p") a.plan = true;
     else if (arg === "--demo" || arg === "-d") a.demo = true;
     else if (arg === "--guard" || arg === "-g") a.guard = true;
     else if (arg === "--json" || arg === "-j") a.json = true;
+    else if (arg === "--card" || arg === "-c") a.card = true;
+    else if (arg === "--submit") a.submit = true;
+    else if (arg === "--leaderboard") a.leaderboard = true;
+    else if (arg === "--name") { const v = argv[++i]; if (v) a.name = v; }
+    else if (arg.startsWith("--name=")) a.name = arg.slice(7);
+    else if (arg === "--profile") { const v = argv[++i]; if (v && isProfile(v)) a.profile = v; }
+    else if (arg.startsWith("--profile=")) { const v = arg.slice(10); if (isProfile(v)) a.profile = v; }
     else if (!arg.startsWith("-")) a.dir = arg;
   }
   return a;
@@ -270,13 +297,42 @@ function parseArgs(argv: string[]): Args {
 
 /* ------------------------------ run ------------------------------- */
 async function main(): Promise<void> {
-  const { dir, write, plan: wantDoc, demo, guard: wantGuard, json } = parseArgs(process.argv.slice(2));
+  const args = parseArgs(process.argv.slice(2));
+  const { dir, write, plan: wantDoc, demo, guard: wantGuard, json, profile, card } = args;
+  const prof = resolveProfile(profile);
+
+  // --name: claim/print the local leaderboard handle (stored next to a keypair
+  // that never leaves this machine).
+  if (args.name !== undefined) {
+    try { const id = setName(args.name); console.log("  " + c.green("✓") + " leaderboard name set to " + c.cyan(id.name || "")); }
+    catch (e) { console.error("  name error: " + ((e as Error).message)); process.exitCode = 1; }
+    return;
+  }
+
+  const lbUrl = process.env.OBOL_LEADERBOARD_URL;
+
+  // --leaderboard: fetch + print the public board (opt-in; needs an endpoint).
+  if (args.leaderboard) {
+    if (!lbUrl) { console.log("  leaderboard is opt-in — set OBOL_LEADERBOARD_URL to a server you trust."); return; }
+    try {
+      const res = await fetch(lbUrl.replace(/\/$/, "") + "/leaderboard?limit=20");
+      const data = await res.json() as { entries: Array<{ rank: number; displayName: string; savedUSD: number; verified: boolean }> };
+      console.log("\n  " + c.bold("Obol leaderboard") + c.dim("  — measured cache savings") + "\n");
+      for (const e of data.entries) {
+        const v = e.verified ? c.green(" ✓") : "";
+        console.log("  " + c.dim(String(e.rank).padStart(2) + ".") + " " + e.displayName.padEnd(20) + c.green(usd(e.savedUSD)) + v);
+      }
+      console.log("");
+    } catch (e) { console.error("  couldn't reach the leaderboard: " + ((e as Error).message)); process.exitCode = 1; }
+    return;
+  }
   const usage = demo ? demoUsage() : readUsage(dir);
 
   // --json: emit the full report as machine-readable data (used by the VS Code
   // extension and anyone scripting Obol). Still 100% deterministic + zero-token.
   if (json) {
-    process.stdout.write(JSON.stringify(buildReport(usage, pkg.version), null, 2) + "\n");
+    const histRO: HistorySummary = demo ? demoHistory() : summarize(loadHistory());
+    process.stdout.write(JSON.stringify(buildReport(usage, pkg.version, prof, histRO), null, 2) + "\n");
     return;
   }
 
@@ -287,9 +343,11 @@ async function main(): Promise<void> {
 
   fingerprintReport(usage);
   console.log("  " + RULE + "\n");
-  proofReport(proof(usage));
+  const pf = proof(usage);
+  proofReport(pf);
 
-  const d = diagnose(usage);
+  const d = filterDiagnosis(diagnose(usage), prof);
+  if (profile) console.log("  " + c.dim(`profile: `) + c.cyan(PRESETS[prof.id].name) + c.dim(` — ${PRESETS[prof.id].blurb}`) + "\n");
   diagnosisReport(d, usage.totalCostUSD);
 
   const applyPlan = planApply(d, usage);
@@ -297,6 +355,56 @@ async function main(): Promise<void> {
   applyReport(applyPlan, applied);
 
   recommendReport(recommend(d, applyPlan));
+
+  // Step 5 — local savings history (on-disk, ~/.obol/history.json). Demo never
+  // writes; a real run records a scan (or an apply event when --apply wrote fixes).
+  let hist: HistorySummary;
+  if (demo) {
+    hist = demoHistory();
+  } else {
+    const okApplied = (applied || []).filter((r) => r.ok).length;
+    hist = recordRun({
+      kind: write && okApplied ? "apply" : "scan",
+      profile: prof.id,
+      estSaveUSD: d.totalEstSaveUSD,
+      receiptSavedUSD: pf.cache.savedUSD,
+      appliedGreen: write ? okApplied : 0,
+      appliedSaveUSD: write ? applyPlan.green.reduce((x, a) => x + a.estSaveUSD, 0) : 0,
+    });
+  }
+  historyReport(hist);
+
+  // --card: write a shareable SVG savings card next to you (deterministic, no network).
+  if (card) {
+    const rep = buildReport(usage, pkg.version, prof, hist);
+    const cardPath = join(process.cwd(), "obol-card.svg");
+    try {
+      writeFileSync(cardPath, shareCard(rep), "utf8");
+      console.log("  " + c.dim("share card → ") + c.cyan(shortPath(cardPath)) + "\n");
+    } catch { /* best-effort */ }
+  }
+
+  // --submit: opt-in. Sends ONLY public aggregates (per-model cached tokens +
+  // the measured figure), signed by the local key. Nothing else leaves the box.
+  if (args.submit) {
+    if (!lbUrl) { console.log("  " + c.dim("submit is opt-in — set OBOL_LEADERBOARD_URL to a server you trust.") + "\n"); }
+    else {
+      const id = loadIdentity();
+      if (!id.name) { console.log("  " + c.dim("claim a name first: ") + c.cyan("obol --name <handle>") + "\n"); }
+      else {
+        try {
+          const rep = buildReport(usage, pkg.version, prof, hist);
+          const signed = signSubmission(buildSubmission(rep, id.name), id);
+          const res = await fetch(lbUrl.replace(/\/$/, "") + "/submit", {
+            method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(signed),
+          });
+          const out = await res.json() as { ok: boolean; rank?: number; reason?: string };
+          if (out.ok) console.log("  " + c.green("✓") + " submitted — rank " + c.bold("#" + out.rank) + "\n");
+          else console.log("  " + c.amber("submission rejected: ") + (out.reason || "unknown") + "\n");
+        } catch (e) { console.error("  submit failed: " + ((e as Error).message) + "\n"); }
+      }
+    }
+  }
 
   // Step 4 — the Quality Guard. Plan is always free. The live check is opt-in.
   const gplan = planGuard(applyPlan, usage);

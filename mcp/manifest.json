@@ -1,0 +1,31 @@
+{
+  "manifest_version": "0.2",
+  "name": "obol",
+  "display_name": "Obol",
+  "version": "0.0.1",
+  "description": "Deterministic, zero-token Claude Code token-usage analyzer — measured cache savings and concrete ways to spend less.",
+  "long_description": "Obol reads your local Claude Code logs and runs the exact same deterministic math as the Obol CLI and VS Code extension — no LLM, no network, nothing sent anywhere, zero tokens spent. It reports the money prompt caching has already saved you (measured, not estimated), grades your efficiency, and lists concrete, confidence-rated opportunities to spend less. Ask Claude to \"analyze my token usage\" and the report appears right in the conversation.",
+  "author": { "name": "Quin" },
+  "homepage": "https://github.com/qwinahh/obol",
+  "documentation": "https://github.com/qwinahh/obol",
+  "license": "MIT",
+  "keywords": ["tokens", "claude-code", "cost", "optimization", "caching", "analytics"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/server.js"]
+    }
+  },
+  "tools": [
+    {
+      "name": "analyze_token_usage",
+      "description": "Analyze Claude Code token usage and return a deterministic, zero-token report: measured cache savings, efficiency grade, and concrete money-saving opportunities."
+    }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=18.0.0" }
+  }
+}

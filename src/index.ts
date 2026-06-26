@@ -17,5 +17,32 @@ export { fingerprint } from "./core/fingerprint";
 export type { Fingerprint } from "./core/fingerprint";
 export { recommend } from "./core/recommend";
 export type { NextStep } from "./core/recommend";
+export {
+  resolveProfile, filterDiagnosis, profileView, defaultProfile,
+  isEnabled, confRank, PRESETS, PROFILE_IDS,
+} from "./core/profile";
+export type {
+  Profile, ProfileId, ProfilePreset, ProfileView, ProfileTechniqueView, Confidence,
+} from "./core/profile";
+export {
+  loadHistory, recordRun, summarize, demoHistory, historyPath,
+} from "./core/history";
+export type {
+  HistorySummary, HistoryEntry, HistoryFile, HistoryPoint, HistoryKind, RecordInput,
+} from "./core/history";
 export { buildReport } from "./core/report";
+export { shareCard } from "./core/sharecard";
+export {
+  eventsFromRow, tail, activeSessionFile, demoActivity, modelSaving,
+} from "./core/activity";
+export type { ActivityEvent, ActivityKind, TailResult } from "./core/activity";
+export {
+  loadIdentity, setName, validateName, identityPath, buildSubmission,
+  signSubmission, verifySignature, recompute, plausible, acceptSubmission,
+  canonical, CAPS, SUB_SCHEMA,
+} from "./core/leaderboard";
+export type {
+  Submission, SignedSubmission, SubModel, Identity, PlausibleResult, AcceptResult,
+} from "./core/leaderboard";
+export type { ShareCardOpts } from "./core/sharecard";
 export type { ObolReport } from "./core/report";

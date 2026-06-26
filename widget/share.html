@@ -1,0 +1,91 @@
+<button id="obShareBtn" title="Share your savings" style="position:fixed;top:8px;right:42px;z-index:99;height:24px;padding:0 11px;border-radius:7px;background:rgba(255,255,255,0.08);color:#efedf6;border:0.5px solid rgba(255,255,255,0.22);font-family:Poppins,sans-serif;font-size:12px;font-weight:500;cursor:pointer;-webkit-app-region:no-drag;">Share</button>
+
+<div id="obShareOv" style="position:fixed;inset:0;z-index:200;display:none;background:rgba(5,4,9,0.82);align-items:center;justify-content:center;padding:18px;-webkit-app-region:no-drag;">
+  <div style="width:330px;max-width:94%;font-family:Poppins,sans-serif;">
+    <canvas id="obShareCanvas" width="800" height="800" style="width:100%;border-radius:18px;display:block;box-shadow:0 18px 55px rgba(0,0,0,0.6);"></canvas>
+    <div style="display:flex;gap:6px;margin-top:12px;">
+      <button class="obSeg" data-s="session" style="flex:1;">This session</button>
+      <button class="obSeg on" data-s="all" style="flex:1;">All-time</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button id="obShareCopy" style="flex:1;">Copy image</button>
+      <button id="obShareSave" style="flex:1;">Save PNG</button>
+      <button id="obShareClose" style="width:auto;padding:0 14px;">Close</button>
+    </div>
+    <div id="obShareMsg" style="text-align:center;font-size:11px;color:#928f9d;margin-top:9px;min-height:14px;"></div>
+  </div>
+</div>
+
+<style>
+.obSeg,#obShareCopy,#obShareSave,#obShareClose{font-family:Poppins,sans-serif;font-size:12px;font-weight:500;height:34px;border:0.5px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.04);color:#efedf6;border-radius:8px;cursor:pointer;}
+.obSeg:hover,#obShareCopy:hover,#obShareSave:hover,#obShareClose:hover{background:rgba(255,255,255,0.09);}
+.obSeg.on{border-color:rgba(255,255,255,0.5);background:rgba(255,255,255,0.14);color:#fff;}
+</style>
+
+<script>
+(function(){
+  var scope='all';
+  function O(){ return window.OBOL || {}; }
+  var logo=new Image(), logoReady=false;
+  logo.onload=function(){ logoReady=true; draw(); };
+  logo.src=(document.querySelector('.brand .o')||{}).src||'';
+
+  function rr(x,X,Y,W,H,r){ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+W,Y,X+W,Y+H,r); x.arcTo(X+W,Y+H,X,Y+H,r); x.arcTo(X,Y+H,X,Y,r); x.arcTo(X,Y,X+W,Y,r); x.closePath(); }
+
+  function ring(x,S){
+    var bc=S/2, R=S*0.32, sig=S*0.050, gg=S*0.0175;
+    function half(scale,am){ for(var X=gg/2;X<S;X+=gg)for(var Y=gg/2;Y<S;Y+=gg){ var d=Math.hypot(X-bc,Y-bc); var B=Math.exp(-Math.pow(d-R,2)/(2*sig*sig)); if(B>0.05){ x.globalAlpha=Math.min(0.85,(0.14+0.78*B)*am); x.beginPath(); x.fillStyle='#e040fb'; x.arc(X,Y,(gg*0.6)*Math.pow(B,0.55)*scale,0,6.2832); x.fill(); } } }
+    if(x.filter!==undefined){ x.filter='blur(5px)'; half(1.4,0.20); x.filter='none'; }
+    half(1,0.42); x.globalAlpha=1;
+  }
+
+  function draw(){
+    var cv=document.getElementById('obShareCanvas'); if(!cv) return;
+    var S=cv.width, x=cv.getContext('2d'), o=O();
+    var isAll=(scope==='all');
+    var amt=isAll?(o.allTime||'0.00'):(o.measured||'0.00');
+    var eb='SAVED WITH OBOL · '+(isAll?'ALL-TIME':'THIS SESSION');
+    var link=(o.share&&o.share.link)?o.share.link:'obol.dev';
+    var nm='@'+((o.share&&o.share.name)?o.share.name:'you');
+
+    x.clearRect(0,0,S,S);
+    rr(x,0,0,S,S,36); x.save(); x.clip();
+    var g=x.createLinearGradient(S*0.13,0,S*0.87,S); g.addColorStop(0,'#0d130f'); g.addColorStop(1,'#080a09');
+    x.fillStyle=g; x.fillRect(0,0,S,S);
+    ring(x,S);
+
+    x.textBaseline='alphabetic';
+    if(logoReady){ x.drawImage(logo, 60, 60, 40, 40); }
+    x.fillStyle='#fff'; x.font='700 40px Poppins,Arial,sans-serif'; x.textAlign='left'; x.fillText('bol', 102, 96);
+
+    x.save(); x.fillStyle='#fff'; x.font='600 19px "JetBrains Mono",monospace'; x.textAlign='center';
+    try{ x.letterSpacing='4px'; }catch(e){} x.fillText(eb, S/2, 352); try{ x.letterSpacing='0px'; }catch(e){}
+    x.restore();
+
+    // amount: white $ (top-aligned, glow) + green number (glow), centered
+    var big='800 138px Poppins,Arial,sans-serif', sm='800 70px Poppins,Arial,sans-serif', gap=6, baseY=470;
+    x.font=big; var nw=x.measureText(amt).width;
+    x.font=sm; var dw=x.measureText('$').width;
+    var sx=S/2-(dw+gap+nw)/2;
+    x.save(); x.font=sm; x.fillStyle='#159e6b'; x.textAlign='left'; x.shadowColor='rgba(21,158,107,0.45)'; x.shadowBlur=12; x.fillText('$', sx, baseY-50); x.restore();
+    x.save(); x.font=big; x.fillStyle='#35d49b'; x.textAlign='left'; x.shadowColor='rgba(53,212,155,0.55)'; x.shadowBlur=28; x.fillText(amt, sx+dw+gap, baseY); x.restore();
+
+    x.save(); x.fillStyle='#ec7bff'; x.font='500 23px "JetBrains Mono",monospace'; x.textAlign='center'; x.fillText(link, S/2, 706); x.restore();
+    x.fillStyle='#cfe9dd'; x.font='600 22px Poppins,Arial,sans-serif'; x.textAlign='center'; x.fillText(nm, S/2, 740);
+
+    x.restore();
+    rr(x,1.5,1.5,S-3,S-3,35); x.lineWidth=1.5; x.strokeStyle='rgba(52,226,155,0.22)'; x.stroke();
+  }
+
+  function setScope(s){ scope=s; Array.prototype.forEach.call(document.querySelectorAll('.obSeg'),function(b){ b.classList.toggle('on', b.getAttribute('data-s')===s); }); draw(); }
+  function msg(t){ var m=document.getElementById('obShareMsg'); if(m){ m.textContent=t; setTimeout(function(){ if(m.textContent===t) m.textContent=''; },2000); } }
+  function ipc(){ try{ return require('electron').ipcRenderer; }catch(e){ return null; } }
+  function png(){ try{ return document.getElementById('obShareCanvas').toDataURL('image/png'); }catch(e){ return null; } }
+
+  var ob=document.getElementById('obShareBtn'); if(ob) ob.onclick=function(){ document.getElementById('obShareOv').style.display='flex'; (document.fonts&&document.fonts.ready?document.fonts.ready.then(draw):draw()); draw(); };
+  var cl=document.getElementById('obShareClose'); if(cl) cl.onclick=function(){ document.getElementById('obShareOv').style.display='none'; };
+  Array.prototype.forEach.call(document.querySelectorAll('.obSeg'),function(b){ b.onclick=function(){ setScope(b.getAttribute('data-s')); }; });
+  var cp=document.getElementById('obShareCopy'); if(cp) cp.onclick=function(){ var d=png(); if(!d){ msg('Could not render'); return; } var i=ipc(); if(i){ i.send('obol-copy-png', d); msg('Copied to clipboard'); } else msg('Copy needs the app'); };
+  var sv=document.getElementById('obShareSave'); if(sv) sv.onclick=function(){ var d=png(); if(!d){ msg('Could not render'); return; } var i=ipc(); if(i){ i.send('obol-save-png', d); msg('Choose where to save…'); } else msg('Save needs the app'); };
+})();
+</script>

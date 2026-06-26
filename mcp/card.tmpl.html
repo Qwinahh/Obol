@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Obol token usage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:transparent;}
+body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#efedf6;
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+.wrap{padding:10px;}
+.card{position:relative; max-width:640px; background:#131119; border:0.5px solid rgba(255,255,255,0.10);
+  border-radius:14px; padding:18px 20px;}
+#bg{position:absolute; inset:0; width:100%; height:100%; border-radius:14px; pointer-events:none;}
+.in{position:relative;}
+.hd{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+.brand{display:flex; align-items:baseline; gap:0;}
+.brand .o{width:20px; height:20px; object-fit:contain; position:relative; top:1px; margin-right:1px;}
+.brand .wm{font-weight:700; font-size:26px; letter-spacing:-0.04em; color:#fff; line-height:1;}
+.status{font-size:11px; color:#928f9d; margin:-4px 0 14px; letter-spacing:0.02em; min-height:14px;}
+.status .dot{display:inline-block; width:6px; height:6px; border-radius:50%; background:#35d49b; margin-right:6px; vertical-align:1px;}
+.hero{margin-bottom:18px; text-align:center;}
+.amt{font-size:36px; font-weight:700; line-height:1.05; letter-spacing:-0.01em;}
+.amt .s{color:#159e6b;} .amt .n{color:#35d49b;}
+.amtsub{font-size:13px; color:#bdbbc8; margin-top:3px;}
+.amtsub b{color:#efedf6; font-weight:600;}
+.grade{margin-bottom:18px;}
+.grade .row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:7px;}
+.grade .lbl{font-size:11px; color:#bdbbc8; letter-spacing:0.02em;}
+.grade .gv{font-family:'Poppins',sans-serif; font-size:17px; font-weight:700; letter-spacing:-0.01em;}
+.grade .gv .sc{font-size:12px; font-weight:500; color:#bdbbc8; margin-left:3px;}
+.gtrack{position:relative; display:flex; gap:3px;}
+.gseg{flex:1; height:10px; border-radius:2px;}
+.gmk{position:absolute; top:-4px; width:4px; height:18px; border-radius:1px; background:#ffffff; box-shadow:0 0 0 2px #131119;}
+.gticks{display:flex; font-size:10px; color:#928f9d; margin-top:5px; letter-spacing:0.04em;}
+.gticks span{flex:1; text-align:center;}
+.stats{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px;}
+.stat{background:rgba(255,255,255,0.04); border-radius:9px; padding:10px 12px;}
+.stat .k{font-size:12px; color:#bdbbc8;} .stat .v{font-size:19px; font-weight:600;}
+.tabs{display:flex; gap:6px; margin-bottom:13px;}
+.tab{position:relative; flex:1; display:inline-flex; align-items:center; justify-content:center; gap:5px;
+  font-family:'Poppins',sans-serif; font-size:13px; font-weight:500; padding:7px 8px;
+  border:0.5px solid rgba(255,255,255,0.14); background:transparent; color:#efedf6; border-radius:8px; cursor:pointer;}
+.tab:hover{background:rgba(255,255,255,0.06);}
+.tab.on{border-color:rgba(255,255,255,0.55); background:rgba(255,255,255,0.14); color:#ffffff;}
+.tab .i{display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%;
+  border:1px solid currentColor; font-size:9px; font-style:italic; font-weight:700; line-height:1; opacity:0.55; cursor:help;}
+.tab .i:hover{opacity:1;}
+.tip{position:absolute; bottom:calc(100% + 8px); width:190px; background:#221f2b; border:0.5px solid rgba(255,255,255,0.18);
+  border-radius:8px; padding:8px 10px; font-size:11px; font-weight:400; color:#cbc9d6; line-height:1.45; text-align:left;
+  opacity:0; pointer-events:none; transition:opacity .14s ease; z-index:6; box-shadow:0 8px 24px rgba(0,0,0,0.45);}
+.tip.l{left:0;} .tip.c{left:50%; transform:translateX(-50%);} .tip.r{right:0;}
+.tab .i:hover + .tip{opacity:1;}
+.ddbar{display:flex; align-items:center; justify-content:space-between; width:100%; padding:10px 13px;
+  border:0.5px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.04); border-radius:9px; cursor:pointer;
+  color:#efedf6; font-family:'Poppins',sans-serif; font-size:13px; font-weight:500; text-align:left;}
+.ddbar:hover{background:rgba(255,255,255,0.07);}
+.ddbar .chev{font-size:9px; color:#bdbbc8; transition:transform .22s ease;}
+.ddbar.open .chev{transform:rotate(180deg);}
+.ddbar .sum{font-size:12px; color:#bdbbc8; font-weight:400;}
+.ddb{overflow:hidden; max-height:0; opacity:0; margin-top:0;
+  transition:max-height .30s ease, opacity .22s ease, margin-top .30s ease;}
+.ddb.open{max-height:900px; opacity:1; margin-top:12px;}
+.finds .none{font-size:13px; color:#bdbbc8; padding:2px 0;}
+.finds .lead{font-size:12px; color:#bdbbc8; margin-bottom:8px;}
+.find{margin-bottom:11px;}
+.find .top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+.find .nm{font-size:13px; font-weight:600;}
+.bar{height:4px; background:rgba(255,255,255,0.07); border-radius:2px; margin:5px 0; overflow:hidden;}
+.bar i{display:block; height:100%; background:rgba(255,255,255,0.55);}
+.find .p{font-size:12px; color:#bdbbc8;}
+.find .id{font-size:11px; color:#928f9d; margin-top:2px;}
+.foot{border-top:0.5px solid rgba(255,255,255,0.10); margin-top:14px; padding-top:10px; font-size:11px; color:#928f9d; letter-spacing:0.05em;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" role="region" aria-label="Obol token usage summary">
+    <canvas id="bg"></canvas>
+    <div class="in">
+      <div class="hd">
+        <div class="brand">
+          <img class="o" alt="O" src="__LOGO_SRC__" />
+          <span class="wm">bol</span>
+        </div>
+      </div>
+
+      <div class="status" id="ob-status"></div>
+
+      <div class="hero">
+        <div class="amt" id="ob-amt"><span class="s">$</span><span class="n">0.00</span></div>
+        <div class="amtsub" id="ob-amtsub">saved this session</div>
+      </div>
+
+      <div class="grade">
+        <div class="row"><span class="lbl">EFFICIENCY</span><span class="gv" id="ob-gv"></span></div>
+        <div class="gtrack">
+          <span class="gseg" style="background:#ff3b30"></span>
+          <span class="gseg" style="background:#ff9500"></span>
+          <span class="gseg" style="background:#34d94a"></span>
+          <span class="gseg" style="background:#2e9bff"></span>
+          <span class="gseg" style="background:#e040fb"></span>
+          <div class="gmk" id="ob-mk" style="left:0%;"></div>
+        </div>
+        <div class="gticks"><span>D</span><span>C</span><span>B</span><span>A</span><span>S</span></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Sessions</div><div class="v" id="ob-sessions">0</div></div>
+        <div class="stat"><div class="k">Total spend</div><div class="v" id="ob-spend">$0.00</div></div>
+        <div class="stat"><div class="k">All-time saved</div><div class="v" id="ob-alltime"><span style="color:#159e6b;">$</span><span style="color:#35d49b;">0.00</span></div></div>
+      </div>
+
+      <div class="tabs" id="ob-tabs">
+        <button class="tab" data-p="careful">Careful<span class="i" aria-label="About Careful">i</span><span class="tip l">Only high-confidence wins. Conservative changes Obol is sure about.</span></button>
+        <button class="tab" data-p="balanced">Balanced<span class="i" aria-label="About Balanced">i</span><span class="tip c">High and medium confidence. The default balance of safe and likely wins.</span></button>
+        <button class="tab" data-p="aggressive">Aggressive<span class="i" aria-label="About Aggressive">i</span><span class="tip r">Every detected opportunity, including lower-confidence ideas to review.</span></button>
+      </div>
+
+      <button class="ddbar" id="ob-dd" aria-expanded="false">
+        <span>Opportunities <span class="sum" id="ob-ddsum"></span></span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="ddb" id="ob-ddbody">
+        <div class="finds" id="ob-finds"></div>
+      </div>
+
+      <div class="foot">DETERMINISTIC · ZERO-TOKEN · RUNS ON YOUR MACHINE</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* background halftone dots: persistent slight glow in the current scale colour */
+(function(){
+  var card = document.querySelector('.card'), cv = document.getElementById('bg'), x = cv.getContext('2d');
+  var cur = [150,150,170];
+  window.__obolTint = [150,150,170];
+  var cw = 14, t = 0, W, H, cols, rows;
+  function size(){ var r = card.getBoundingClientRect(); W = cv.width = Math.max(1, r.width|0); H = cv.height = Math.max(1, r.height|0); cols = Math.ceil(W/cw)+1; rows = Math.ceil(H/cw)+1; }
+  size(); addEventListener('resize', size); if (window.ResizeObserver){ try{ new ResizeObserver(size).observe(card); }catch(e){} }
+  (function frame(){ t += 0.02;
+    var g = window.__obolTint;
+    for (var c=0;c<3;c++) cur[c] += (g[c]-cur[c]) * 0.05;
+    x.clearRect(0,0,W,H);
+    for (var j=0;j<rows;j++) for (var i=0;i<cols;i++){
+      var v = Math.sin(i*0.18+t)+Math.sin(j*0.22-t*0.8)+Math.sin((i+j)*0.12+t*0.5)+Math.sin(Math.hypot(i-cols/2,j-rows/2)*0.16-t*1.1);
+      v=(v+4)/8; v=Math.pow(v,0.7); var r=v*v*(cw*0.46); if(r<0.4) continue;
+      x.beginPath(); x.fillStyle='rgba('+(cur[0]|0)+','+(cur[1]|0)+','+(cur[2]|0)+','+(0.025+v*0.12).toFixed(3)+')';
+      x.arc(i*cw+cw/2, j*cw+cw/2, r, 0, 6.2832); x.fill();
+    }
+    requestAnimationFrame(frame); })();
+})();
+
+/* card content from window.OBOL */
+(function(){
+  var O = window.OBOL || {};
+  var BANDS = ["D","C","B","A","S"];
+  var SCALE = ["#ff3b30","#ff9500","#34d94a","#2e9bff","#e040fb"];
+  function hexRgb(h){ h=h.replace('#',''); return [parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)]; }
+  function glowTint(rgb){ return [rgb[0]*0.62+150*0.38, rgb[1]*0.62+150*0.38, rgb[2]*0.62+150*0.38]; }
+  function gradeFor(score){
+    var sc = Math.max(0, Math.min(100, score||0));
+    var idx = Math.min(4, Math.floor(sc/20));
+    var within = (sc - idx*20)/20;
+    var mod = within < (1/3) ? "-" : (within < (2/3) ? "" : "+");
+    return { label: BANDS[idx] + mod, color: SCALE[idx] };
+  }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){return ({"&":"&amp;","<":"&lt;",">":"&gt;"})[c];}); }
+  function money(a){ return '<span class="s" style="color:#159e6b">$</span><span class="n" style="color:#35d49b">'+esc(String(a).replace(/^\$/,""))+'</span>'; }
+  function set(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
+
+  function paint(){
+    var connected = O.connected !== false;
+    var score = O.score!=null ? O.score : 0;
+    document.getElementById('ob-amt').innerHTML = '<span class="s">$</span><span class="n">'+esc(O.measured!=null?O.measured:"0.00")+'</span>';
+    document.getElementById('ob-amtsub').textContent = 'saved this session';
+    set('ob-sessions', O.sessions!=null?O.sessions:0);
+    set('ob-spend', '$'+(O.spend!=null?O.spend:"0.00"));
+    document.getElementById('ob-alltime').innerHTML = money(O.allTime!=null?O.allTime:"0.00");
+    var st = document.getElementById('ob-status');
+    if (st) st.innerHTML = connected ? ('<span class="dot"></span>' + (O.latestFile ? ('Latest · ' + esc(O.latestFile)) : 'Reading your Claude Code logs')) : '';
+    var gEl = document.getElementById('ob-gv');
+    var mk = document.getElementById('ob-mk');
+    var track = document.querySelector('.gtrack');
+    if (connected) {
+      var g = gradeFor(score);
+      gEl.textContent = g.label; gEl.style.color = g.color;
+      mk.style.display = 'block';
+      var pos = Math.max(0, Math.min(100, score));
+      mk.style.left = pos + "%"; mk.style.transform = "translateX(-" + (pos/100*4) + "px)";
+      if (track) track.style.opacity = '1';
+      window.__obolTint = glowTint(hexRgb(g.color));
+    } else {
+      gEl.textContent = 'not connected'; gEl.style.color = '#928f9d';
+      mk.style.display = 'none';
+      if (track) track.style.opacity = '0.35';
+      window.__obolTint = [120,120,138];
+    }
+  }
+
+  (function(){
+    var dd = document.getElementById('ob-dd'), ddb = document.getElementById('ob-ddbody');
+    if (dd && ddb) dd.addEventListener('click', function(){
+      var opening = !ddb.classList.contains('open');
+      ddb.classList.toggle('open', opening);
+      dd.classList.toggle('open', opening);
+      dd.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    });
+  })();
+
+  var P = O.profiles || {careful:{finds:[]},balanced:{finds:[]},aggressive:{finds:[]}};
+  var active = O.activeProfile || "balanced";
+  function render(p){
+    active = p;
+    var d = P[p] || {finds:[],note:""};
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ b.classList.toggle('on', b.getAttribute('data-p')===p); });
+    var el = document.getElementById('ob-finds'), fs = d.finds || [];
+    var sum = document.getElementById('ob-ddsum');
+    if (sum) sum.textContent = fs.length ? ("· up to " + (d.up||"$0.00") + " (" + fs.length + ")") : "· nothing to apply";
+    if(!fs.length){ el.innerHTML = '<div class="none">Nothing to apply. Your usage already looks efficient'+(d.note?(" ("+esc(d.note)+")"):"")+'.</div>'; return; }
+    var html = '<div class="lead">Up to '+money(d.up||"0.00")+(d.note?(" · "+esc(d.note)):"")+'</div>';
+    html += fs.map(function(f){ return '<div class="find"><div class="top"><span class="nm">'+esc(f.nm)+'</span><span style="font-size:12px;font-weight:600;">'+money(f.amt)+'</span></div><div class="bar"><i style="width:'+(f.w||4)+'%"></i></div><div class="p">'+esc(f.p)+'</div><div class="id">'+esc(f.id)+'</div></div>'; }).join("");
+    el.innerHTML = html;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ b.addEventListener('click', function(){ render(b.getAttribute('data-p')); var ddb=document.getElementById('ob-ddbody'),dd=document.getElementById('ob-dd'); if(ddb&&!ddb.classList.contains('open')){ddb.classList.add('open');if(dd){dd.classList.add('open');dd.setAttribute('aria-expanded','true');}} }); });
+  paint(); render(active);
+
+  window.__obolApply = function(next){ if(!next) return; O = next; P = O.profiles || P; paint(); render(active); if (O.justAnalyzed) { var st=document.getElementById('ob-status'); if(st){ st.innerHTML='<span class="dot" style="background:#e040fb"></span>Analyzing '+esc(O.latestFile||'your logs')+'\u2026'; setTimeout(paint,1600); } } };
+})();
+</script>
+</body>
+</html>

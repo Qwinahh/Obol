@@ -24,3 +24,8 @@ obol-apply.md
 editor/dist/
 editor/data/
 editor/*.vsix
+.obol/
+server/data/
+obol-card.svg
+obol-card.png
+*.fuse_hidden*

@@ -1,0 +1,10 @@
+{
+  "name": "obol-mcp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Obol MCP server — runs the deterministic Obol token analyzer inside Claude Desktop.",
+  "main": "server.js",
+  "bin": { "obol-mcp": "server.js" },
+  "scripts": { "start": "node server.js", "pack": "node build.js" },
+  "license": "MIT"
+}

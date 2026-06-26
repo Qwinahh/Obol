@@ -1,0 +1,57 @@
+{
+  "name": "obol-live",
+  "version": "0.0.1",
+  "private": true,
+  "productName": "Obol Live",
+  "description": "Obol Live \u2014 an always-on-top desktop widget showing your live token-savings card.",
+  "author": "Quin",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "bundle": "node prepack.js",
+    "dist": "node prepack.js && electron-builder --win",
+    "dist:portable": "node prepack.js && electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "license": "MIT",
+  "build": {
+    "appId": "dev.obol.live",
+    "productName": "Obol Live",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "panel.js",
+      "card.html",
+      "share.html",
+      "dist-version.json",
+      "dist/**/*",
+      "data/**/*",
+      "!**/*.d.ts",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Obol-Live-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Obol Live"
+    },
+    "portable": {
+      "artifactName": "Obol-Live-${version}-portable.exe"
+    }
+  }
+}

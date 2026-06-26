@@ -238,6 +238,8 @@ export function readUsage(overrideDir?: string): UsageSummary {
 
   const byDay: DayUsage[] = [...perDay.entries()].map(([date, c]) => ({
     date,
+    input: c.input, output: c.output,
+    cacheWrite: c.cacheWrite, cacheRead: c.cacheRead,
     tokens: c.input + c.output + c.cacheWrite + c.cacheRead,
     costUSD: perDayCost.get(date) ?? 0,
   })).sort((a, b) => a.date.localeCompare(b.date));

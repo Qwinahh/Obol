@@ -52,8 +52,9 @@ export interface ModelUsage extends TokenCounts {
   costUSD: number;
 }
 
-/** Per-day rollup for trend lines. */
-export interface DayUsage {
+/** Per-day rollup for trend lines. Carries the full token split so any
+ *  surface can window composition + spend to a date range (last 7/30 days). */
+export interface DayUsage extends TokenCounts {
   date: string;        // YYYY-MM-DD
   tokens: number;
   costUSD: number;
@@ -92,6 +93,9 @@ export interface Finding {
   estSavePct: number;       // share of total spend
   autoApply: "green" | "amber" | "n/a";
   action: string;
+  /** Set by a profile filter when a win was silenced (toggled off or below the
+   *  profile's confidence floor). Lets a surface grey the row instead of hiding it. */
+  mutedReason?: "disabled" | "below-confidence";
 }
 
 export interface Diagnosis {

@@ -1,0 +1,7 @@
+node_modules/
+release/
+dist/
+data/
+card.html
+panel.js
+dist-version.json

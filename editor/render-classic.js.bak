@@ -1,0 +1,953 @@
+"use strict";
+var OBOL_FONTS = "";
+try { OBOL_FONTS = require("./fonts"); } catch (e) { OBOL_FONTS = ""; }
+// Obol report -> self-contained HTML for the VS Code webview.
+// Same numbers as the CLI (both build from core.buildReport), re-rendered as a
+// calm, minimalist panel: a single emotional anchor (money saved), a windowed
+// activity view, and the dense report tucked behind progressive disclosure.
+// Pure string building - no network, no tokens.
+
+const esc = (s) =>
+  String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const usd = (n) => {
+  const v = Number(n) || 0;
+  return (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+const gcost = (n) => (n <= 0 ? "$0.00" : n < 0.01 ? "<$0.01" : usd(n));
+const tok = (n) => {
+  const v = Number(n) || 0;
+  if (v >= 1e9) return (v / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+  if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+  if (v >= 1e3) return (v / 1e3).toFixed(0) + "k";
+  return String(Math.round(v));
+};
+const pct = (n) => Math.round(Number(n) || 0) + "%";
+const nonce = () => { let s = ""; const a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"; for (let i = 0; i < 24; i++) s += a[Math.floor(Math.random() * a.length)]; return s; };
+
+/* ---------- empty state ---------- */
+
+function noLogs() {
+  return `
+  <section class="card empty">
+    <div class="emptymark"><svg class="mark" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="var(--accent)" stroke-width="2.3"/><circle cx="12" cy="12" r="3" fill="var(--accent)"/></svg></div>
+    <h2>No Claude Code logs yet</h2>
+    <p class="dim">Obol reads your <code>~/.claude/projects</code> sessions. Nothing there yet, or your logs live elsewhere.</p>
+    <div class="row center">
+      <button class="btn primary" data-cmd="demo">See the demo report</button>
+      <button class="btn" data-cmd="analyze">Re-scan</button>
+    </div>
+  </section>`;
+}
+
+/* ---------- hero + activity (the calm top) ---------- */
+
+function hero(r) {
+  const hasReceipt = !!(r.proof && r.proof.hasCacheReceipt);
+  const demoTag = r.usage.source === "demo://synthetic-usage" ? `<span class="tag soft">demo data</span>` : "";
+  if (hasReceipt) {
+    return `
+  <section class="hero" id="hero">
+    <div class="spinner" id="spinner" aria-hidden="true">
+      <span class="ring"></span><span class="phase" id="phase">reading logs</span>
+    </div>
+    <div class="reveal" id="reveal">
+      <div class="kicker">caching has already saved you <span class="badge">✓ measured</span> ${demoTag}</div>
+      <div class="bigsaved"><span class="cur">$</span><span id="savedNum" data-to="${(r.proof.cache.savedUSD || 0).toFixed(2)}">0.00</span></div>
+      <div class="dim sub">${pct(r.proof.cache.savedPct)} off your reused context — measured in $, lifetime</div>
+    </div>
+  </section>`;
+  }
+  // no receipt yet -> lead with the opportunity, still calm
+  return `
+  <section class="hero" id="hero">
+    <div class="spinner" id="spinner" aria-hidden="true">
+      <span class="ring"></span><span class="phase" id="phase">reading logs</span>
+    </div>
+    <div class="reveal" id="reveal">
+      <div class="kicker">estimated savings on the table ${demoTag}</div>
+      <div class="bigsaved amber"><span class="cur">$</span><span id="savedNum" data-to="${(r.diagnosis.totalEstSaveUSD || 0).toFixed(2)}">0.00</span></div>
+      <div class="dim sub">about ${pct(r.diagnosis.totalEstSavePct)} of ${usd(r.usage.totalCostUSD)} · see the report below</div>
+    </div>
+  </section>`;
+}
+
+function activity(r) {
+  const u = r.usage;
+  const hasDays = u.byDay && u.byDay.length > 1;
+  const ranges = hasDays
+    ? `<div class="seg" id="rangeSeg" role="tablist">
+         <span class="seg-ind" id="segInd" aria-hidden="true"></span>
+         <button class="opt active" data-range="all">All</button>
+         <button class="opt" data-range="30">30d</button>
+         <button class="opt" data-range="7">7d</button>
+       </div>`
+    : "";
+  // sparkline (built client-side too, but seed an all-time version for no-JS)
+  return `
+  <section class="card activity">
+    <div class="ahead">
+      <span class="dim small label">your activity</span>
+      ${ranges}
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="aSpent">${usd(u.totalCostUSD)}</b><span class="dim">spent</span></div>
+      <div class="stat"><b id="aTokens">${tok(u.totalTokens)}</b><span class="dim">tokens</span></div>
+      <div class="stat"><b id="aDays">${u.sessions}</b><span class="dim">sessions</span></div>
+      <div class="stat range-note dim small" id="aSpan"></div>
+    </div>
+    <div class="dim small label tight">where your tokens go</div>
+    <div class="stacked" id="comp"></div>
+    <div class="legend" id="legend"></div>
+    <div class="trend" id="trend"></div>
+  </section>`;
+}
+
+/* ---------- detail panels (behind "View full report") ---------- */
+
+function fingerprintCard(r) {
+  const f = r.fingerprint;
+  const cls = f.score >= 80 ? "green" : f.score >= 55 ? "amber" : "red";
+  return `
+  <section class="card fp">
+    <div class="fp-head">
+      <div>
+        <div class="dim small label">fingerprint</div>
+        <div class="fp-traits ${cls}">${esc(f.traits.join(" · "))}</div>
+      </div>
+      <div class="fp-score ${cls}"><b>${f.score}</b><span class="dim">/100</span><span class="grade ${cls}">${esc(f.grade)}</span></div>
+    </div>
+    <span class="track tall"><span class="fill ${cls} grow" style="--w:${f.score}%"></span></span>
+  </section>`;
+}
+
+function receiptCard(r) {
+  if (!r.proof || !r.proof.hasCacheReceipt) return "";
+  const c = r.proof.cache;
+  return `
+  <section class="card receipt">
+    <div class="rhead"><span class="badge green">✓ RECEIPT</span><span class="dim small">measured from your logs — not an estimate</span></div>
+    <div class="dim small">would've cost ${usd(c.hypotheticalNoCacheUSD)} · actually cost ${usd(c.actualUSD)} · ${tok(c.cachedTokens)} reused tokens</div>
+  </section>`;
+}
+
+function leaderboardCard(r, lb) {
+  if (!lb) return "";
+  const wall = `<span class="dim small">Anti-cheat: the server recomputes every dollar from your token counts, binds each name to one key, and caps outliers — so a number can't be faked.</span>`;
+  if (lb.entries && lb.entries.length) {
+    const note = lb.note ? `<span class="tag soft">${esc(lb.note)}</span>` : "";
+    const me = (lb.name || "").toLowerCase();
+    const rows = lb.entries.map((e) => {
+      const mine = me && (e.name || "").toLowerCase() === me ? " mine" : "";
+      const v = e.verified ? `<span class="tag green" title="verified">✓</span>` : "";
+      return `<div class="lbrow${mine}">
+        <span class="lbrank">${e.rank}</span>
+        <b class="lbname">${esc(e.displayName || e.name)}</b> ${v}
+        <span class="lbsave green">${usd(e.savedUSD)}</span>
+      </div>`;
+    }).join("");
+    const submit = lb.configured ? `<button class="btn" data-cmd="submit">Submit my savings</button>` : "";
+    const refresh = lb.configured ? `<button class="btn ghost" data-cmd="leaderboard">Refresh</button>` : "";
+    return `
+    <section class="card leaderboard">
+      <div class="chead"><b>Leaderboard</b> <span class="dim small">— measured cache savings, opt-in</span> ${note}</div>
+      <div class="lblist">${rows}</div>
+      <div class="row">${submit}${refresh}</div>
+      <div class="lbwall">${wall}</div>
+    </section>`;
+  }
+  // not configured / opt-in explainer
+  const nameLine = lb.name
+    ? `<div class="dim small">Your handle: <b class="fg">${esc(lb.name)}</b></div>`
+    : `<div class="dim small">Claim a handle: <code>obol --name &lt;you&gt;</code></div>`;
+  return `
+  <section class="card leaderboard optin">
+    <div class="chead"><b>Leaderboard</b> <span class="dim small">— opt-in, off by default</span></div>
+    <div class="dim small">Compare measured savings with other developers. Nothing is sent unless you turn it on — and only public aggregates ever leave your machine, never prompts or logs.</div>
+    ${nameLine}
+    <div class="lbwall">${wall}</div>
+    <div class="dim small mono">set OBOL_LEADERBOARD_URL · obol --submit</div>
+  </section>`;
+}
+
+function sparkSvg(vals) {
+  const n = vals.length;
+  if (n < 2) return "";
+  const W = 240, H = 38, pad = 2;
+  const max = Math.max.apply(null, vals), min = Math.min.apply(null, vals);
+  const span = (max - min) || 1;
+  const x = (i) => pad + (i / (n - 1)) * (W - pad * 2);
+  const y = (v) => H - pad - ((v - min) / span) * (H - pad * 2);
+  const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${x(0).toFixed(1)},${(H - pad).toFixed(1)} ${pts} ${x(n - 1).toFixed(1)},${(H - pad).toFixed(1)}`;
+  const lastX = x(n - 1).toFixed(1), lastY = y(vals[n - 1]).toFixed(1);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <polygon points="${area}" fill="url(#hgrad)"></polygon>
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+    <circle cx="${lastX}" cy="${lastY}" r="2.4" fill="var(--accent)"></circle>
+    <defs><linearGradient id="hgrad" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="var(--accent)" stop-opacity=".18"></stop>
+      <stop offset="1" stop-color="var(--accent)" stop-opacity="0"></stop>
+    </linearGradient></defs>
+  </svg>`;
+}
+
+function historyCard(r) {
+  const h = r.history;
+  if (!h || !h.runs) return "";
+  const streak = h.currentStreak > 1
+    ? `<span class="streak"><span class="flame">▲</span> ${h.currentStreak}-day streak</span>` : "";
+  const applied = h.appliedFixes > 0
+    ? `<div class="hstat"><b class="green">${h.appliedFixes}</b><span class="dim small">fix${h.appliedFixes > 1 ? "es" : ""} applied</span></div>
+       <div class="hstat"><b class="green">~${usd(h.appliedSaveUSD)}</b><span class="dim small">locked in</span></div>` : "";
+  const since = h.firstDate ? ` since ${esc(h.firstDate)}` : "";
+  return `
+  <section class="card history">
+    <div class="chead"><b>Savings history</b> <span class="dim small">— kept on your machine, never uploaded</span> ${streak}</div>
+    <div class="hgrid">
+      <div class="hstat big"><b class="green">${usd(h.measuredSavedUSD)}</b><span class="dim small">measured saved by caching</span></div>
+      ${applied}
+      <div class="hstat"><b>${h.runs}</b><span class="dim small">run${h.runs > 1 ? "s" : ""}${since}</span></div>
+    </div>
+    ${sparkSvg((h.trend || []).map((p) => p.savedUSD))}
+  </section>`;
+}
+
+function profileCard(r) {
+  const p = r.profile;
+  if (!p || !p.techniques) return "";
+  const order = ["careful", "balanced", "aggressive"];
+  const label = { careful: "Careful", balanced: "Balanced", aggressive: "Aggressive" };
+  const idx = Math.max(0, order.indexOf(p.id));
+  const seg = order.map((id) => {
+    const on = p.id === id;
+    return `<button class="pseg${on ? " on" : ""}" data-cmd="profile" data-id="${id}"${on ? ' aria-current="true"' : ""}>${label[id]}</button>`;
+  }).join("");
+  const techs = p.techniques.map((t) => `
+    <button class="tgl${t.enabled ? " on" : ""}" data-cmd="toggle" data-id="${esc(t.id)}" role="switch" aria-checked="${t.enabled ? "true" : "false"}">
+      <span class="knob"></span>
+      <span class="tname">${esc(t.name)}</span>
+      <span class="dim small tcode">${esc(t.id)} · ${esc(t.tier)}</span>
+    </button>`).join("");
+  const offCount = p.techniques.filter((t) => !t.enabled).length;
+  const offNote = offCount ? ` <span class="dim small">· ${offCount} off</span>` : "";
+  return `
+  <section class="card profile">
+    <div class="chead"><b>Profile</b> <span class="dim small">— how hard to chase savings. ${esc(p.blurb)}</span></div>
+    <div class="pseg-wrap" data-pos="${idx}" role="tablist">${seg}<span class="pseg-ind"></span></div>
+    <div class="pmeta dim small">Counts wins at <b class="fg">${esc(p.minConfidence)}</b> confidence or higher · applies <b class="fg">${esc(p.applyStance)}</b></div>
+    <details class="adv">
+      <summary>Advanced — per-technique toggles${offNote}</summary>
+      <div class="tgls">${techs}</div>
+    </details>
+  </section>`;
+}
+
+function findingsCard(r) {
+  const d = r.diagnosis;
+  if (!d.findings || !d.findings.length) return "";
+  const prof = r.profile || {};
+  const hasMuted = d.findings.some((f) => f.mutedReason);
+  let head;
+  if (d.alreadyEfficient && hasMuted) {
+    // Wins exist in the data but the current profile silenced them all.
+    head = `<div class="badge amber big">No wins at ${esc(prof.minConfidence || "high")} confidence.</div>
+      <div class="dim small">Your data has lower-confidence opportunities below. Switch to a looser profile to count them.</div>`;
+  } else if (d.alreadyEfficient) {
+    head = `<div class="badge green big">✓ Already running efficiently.</div>`;
+  } else {
+    head = `<div class="savings"><span class="dim">Estimated savings</span> <b class="green">up to ${usd(d.totalEstSaveUSD)}</b> <span class="dim small">(~${pct(d.totalEstSavePct)} of ${usd(r.usage.totalCostUSD)})</span></div>
+       <div class="dim small">estimates — the receipt proves what caching already saved; the Quality Guard protects these.</div>`;
+  }
+  const max = Math.max.apply(null, d.findings.map((f) => f.estSaveUSD).concat([0.01]));
+  const items = d.findings.map((f) => {
+    const muted = f.mutedReason ? " muted" : "";
+    const mark = f.mutedReason ? `<span class="dim">○</span>` : f.severity === "win" ? `<span class="amber">▲</span>` : f.severity === "ok" ? `<span class="green">✓</span>` : `<span class="dim">•</span>`;
+    const off = f.mutedReason === "disabled" ? `<span class="tag off">off</span>`
+      : f.mutedReason === "below-confidence" ? `<span class="tag off">below ${esc((r.profile && r.profile.minConfidence) || "")}</span>` : "";
+    const tag = off || (f.autoApply === "green" ? `<span class="tag green">auto</span>` : f.autoApply === "amber" ? `<span class="tag amber">review</span>` : "");
+    const save = f.estSaveUSD > 0 ? `<span class="green save">${usd(f.estSaveUSD)}</span>` : `<span class="dim save">—</span>`;
+    const bar = f.estSaveUSD > 0 ? `<span class="track"><span class="fill green grow" style="--w:${(f.estSaveUSD / max) * 100}%"></span></span>` : "";
+    return `<div class="finding${muted}">
+      <div class="frow">${mark} <b>${esc(f.title)}</b> <span class="dim small">${esc(f.techniqueId)} · ${esc(f.confidence)}</span> ${tag} ${save}</div>
+      ${bar}
+      <div class="fmsg">${esc(f.message)}</div>
+      <div class="dim small">${esc(f.action)}</div>
+    </div>`;
+  }).join("");
+  return `<section class="card">${head}<div class="findings">${items}</div></section>`;
+}
+
+function sessionsCard(r) {
+  const u = r.usage;
+  if (!u.bySession || u.bySession.length < 2) return "";
+  const max = u.bySession[0].costUSD || 1;
+  const rows = u.bySession.slice(0, 5).map((s) => {
+    const id = (s.id.length > 8 ? s.id.slice(0, 8) : s.id);
+    const reads = s.repeatedReads && s.repeatedReads.length ? `<span class="amber"> ⟳${s.repeatedReads.length}</span>` : "";
+    return `<div class="srow">
+      <code class="sid">${esc(id)}</code>
+      <span class="track"><span class="fill teal grow" style="--w:${(s.costUSD / max) * 100}%"></span></span>
+      <span class="scost">${usd(s.costUSD)}</span>
+      <span class="dim small">${s.turns}t · ${tok(s.avgCachePrefix)} prefix${reads}</span>
+    </div>`;
+  }).join("");
+  return `<section class="card"><div class="chead"><b>Top sessions</b> <span class="dim small">— where spend concentrates</span></div><div class="sessions">${rows}</div></section>`;
+}
+
+function applyCard(r) {
+  const p = r.apply;
+  if (!p.actions || !p.actions.length) return "";
+  const rows = p.actions.map((a) => {
+    const isGreen = a.tier === "green";
+    const mark = isGreen ? `<span class="green">●</span>` : `<span class="amber">○</span>`;
+    const tag = isGreen ? `<span class="tag green">auto</span>` : `<span class="tag amber">review</span>`;
+    return `<div class="arow">
+      <div>${mark} <b>${esc(a.title)}</b> <span class="dim small">${esc(a.techniqueId)} · ${esc(a.kind)}</span> ${tag}</div>
+      <div class="asum">${esc(a.summary)}</div>
+      <div class="dim small mono">${esc((a.patch || "").split("\n")[0])}${(a.patch || "").includes("\n") ? " …" : ""}</div>
+    </div>`;
+  }).join("");
+  const btn = p.green.length ? `<button class="btn primary" data-cmd="apply">Apply ${p.green.length} safe fix${p.green.length > 1 ? "es" : ""} (reversible)</button>` : "";
+  return `
+  <section class="card">
+    <div class="chead"><b>Apply</b> <span class="green">${p.green.length} ready</span> <span class="dim">/</span> <span class="amber">${p.amber.length} to review</span> <span class="dim small">— green is safe + reversible; amber waits for you</span></div>
+    <div class="applylist">${rows}</div>
+    <div class="row">${btn}</div>
+  </section>`;
+}
+
+function nextCard(r) {
+  if (!r.nextSteps || !r.nextSteps.length) return "";
+  const rows = r.nextSteps.map((s) => {
+    const cls = s.tier === "green" ? "green" : "amber";
+    const save = s.estSaveUSD > 0 ? `<span class="green">up to ${usd(s.estSaveUSD)}</span>` : `<span class="dim">—</span>`;
+    return `<div class="nrow">
+      <div><b class="${cls}">${s.rank}. ${esc(s.title)}</b> <span class="dim small">${esc(s.effort)}</span> ${save}</div>
+      <div class="dim small">${esc(s.detail)}</div>
+    </div>`;
+  }).join("");
+  return `<section class="card"><div class="chead"><b>Do this next</b> <span class="dim small">— biggest, easiest wins first</span></div><div class="nextlist">${rows}</div></section>`;
+}
+
+function guardCard(r) {
+  const g = r.guard;
+  if (!g.probes || !g.probes.length) return "";
+  const safe = g.safe.map((p) => `<div class="grow2"><span class="green">✓</span> <b>${esc(p.title)}</b> <span class="dim small">${esc(p.techniqueId)}</span> <span class="green">proven safe · $0</span><div class="dim small">${esc(p.rationale)}</div></div>`).join("");
+  const replay = g.replay.map((p) => `<div class="grow2"><span class="amber">○</span> <b>${esc(p.title)}</b> <span class="dim small">${esc(p.techniqueId)}</span> <span class="dim">needs a canary check · est <span class="amber">${gcost(p.estCostUSD)}</span></span><div class="dim small">${esc(p.rationale)}</div></div>`).join("");
+  const manual = g.manual.map((p) => `<div class="grow2"><span class="dim">·</span> <b>${esc(p.title)}</b> <span class="dim small">${esc(p.techniqueId)} — ${esc(p.rationale)}</span></div>`).join("");
+  let foot = "";
+  if (g.replay.length) {
+    foot = `<div class="dim small foot">The guard's live check is the one feature that spends tokens — it's off by default. Set <code>ANTHROPIC_API_KEY</code> and run <code>obol --guard</code> (~${gcost(g.estCostUSD)}). Everything above stayed $0. <button class="btn link" data-cmd="guardHint">how?</button></div>`;
+  }
+  return `<section class="card"><div class="chead"><b>Quality Guard</b> <span class="dim small">— prove a fix didn't make answers worse</span></div>${safe}${replay}${manual}${foot}</section>`;
+}
+
+/* ---------- client data payload (drives windowing + animation) ---------- */
+
+function payload(r) {
+  const u = r.usage;
+  const days = (u.byDay || []).map((d) => ({
+    date: d.date,
+    cost: +(d.costUSD || 0),
+    input: d.input || 0, output: d.output || 0,
+    cacheWrite: d.cacheWrite || 0, cacheRead: d.cacheRead || 0,
+  }));
+  return {
+    days,
+    all: {
+      cost: u.totalCostUSD || 0,
+      tokens: u.totalTokens || 0,
+      sessions: u.sessions || 0,
+      input: u.input || 0, output: u.output || 0,
+      cacheWrite: u.cacheWrite || 0, cacheRead: u.cacheRead || 0,
+      first: u.firstDate || "", last: u.lastDate || "",
+    },
+    savedTo: r.proof && r.proof.hasCacheReceipt ? (r.proof.cache.savedUSD || 0) : (r.diagnosis.totalEstSaveUSD || 0),
+  };
+}
+
+/* ---------- document ---------- */
+
+function buildHtml(report, opts) {
+  opts = opts || {};
+  const n = nonce();
+  const found = !!report.found;
+
+  const top = found ? hero(report) + activity(report) : noLogs();
+  const lb = opts.leaderboard || null;
+  const detail = found
+    ? [historyCard(report), leaderboardCard(report, lb), fingerprintCard(report), receiptCard(report), profileCard(report), findingsCard(report), nextCard(report), applyCard(report), sessionsCard(report), guardCard(report)]
+        .join("\n")
+    : "";
+  const discloser = found
+    ? `<div class="row center"><button class="btn ghost" id="moreBtn" aria-expanded="false"><span class="more-label">View full report</span> <span class="chev" aria-hidden="true">›</span></button></div>
+       <div class="detail" id="detail" hidden>${detail}</div>`
+    : "";
+
+  const toolbar = `
+    <div class="toolbar">
+      <div class="brand"><svg class="mark" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="var(--accent)" stroke-width="2.3"/><circle cx="12" cy="12" r="3" fill="var(--accent)"/></svg><span class="wordmark">obol</span><span class="dim ver">v${esc(report.version)}</span></div>
+      <div class="actions">
+        <button class="btn" data-cmd="analyze">Analyze</button>
+        <button class="btn" data-cmd="demo">Demo</button>
+        <button class="btn" id="shareBtn">Share card</button>
+      </div>
+    </div>`;
+
+  const act = opts.activity || null;
+  const activityStrip = `
+    <div class="activity" id="activity"${act ? "" : " hidden"} role="status" aria-live="polite">
+      <span class="adot" id="aDot"></span>
+      <span class="alabel" id="aLabel">${act && act.start ? esc(act.start) : "Working\u2026"}</span>
+      <span class="aspacer"></span>
+      <span class="asaved" id="aSaved" hidden><span class="dim small">saved this session</span> <b class="green" id="aSavedNum">$0.00</b></span>
+    </div>`;
+  const data = found ? JSON.stringify(payload(report)) : "null";
+  const shareSvg = (found && opts.shareSvg) ? opts.shareSvg : "";
+  const shareSection = shareSvg ? `
+    <div class="share-ov" id="shareOv" data-close hidden>
+      <div class="share-modal" role="dialog" aria-modal="true" aria-label="Share card">
+        <div class="share-head"><b>Share card</b> <span class="dim small">— deterministic image, built on your machine</span>
+          <button class="btn ghost xclose" id="shareClose" data-close aria-label="Close">Close \u00d7</button></div>
+        <div class="card-wrap" id="cardWrap">${shareSvg}</div>
+        <div class="row share-actions">
+          <button class="btn primary" id="savePng">Save PNG</button>
+          <button class="btn" id="saveSvg">Save SVG</button>
+          <button class="btn" id="copyPng">Copy image</button>
+          <span class="aspacer"></span>
+          <button class="btn ghost" data-close>Done</button>
+        </div>
+      </div>
+    </div>` : "";
+
+  return `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${n}'; font-src data:; img-src data: blob:;" />
+<style>
+${OBOL_FONTS}
+:root{
+  /* canvas + 4-step surface scale (near-black, faintly cool) */
+  --bg:#0a0b0c; --surface:#101315; --surface-2:#161b1d; --surface-3:#1c2225;
+  --hair:rgba(255,255,255,.07); --hair-2:rgba(255,255,255,.045);
+  --inset:rgba(255,255,255,.045);
+  /* text ramp, tinted a hair cool-green */
+  --fg:#edf1f0; --fg-2:#a6b0ac; --fg-3:#78827e; --faint:#56615d;
+  /* one rationed accent (the "saved" identity) + semantics */
+  --accent:#43c595; --accent-2:#39b487; --accent-ink:#04130d; --accent-soft:rgba(67,197,149,.12);
+  --amber:#d8a559; --amber-soft:rgba(216,165,89,.12); --red:#e0726a;
+  /* composition: output(amber) draws the eye, cacheRead(teal) is the win */
+  --c-cacheRead:#3f9d86; --c-cacheWrite:#52606f; --c-input:#6b736f; --c-output:#d8a559;
+  --shadow:0 1px 0 rgba(0,0,0,.4), 0 8px 24px -18px rgba(0,0,0,.8);
+  --font-ui:"Obol Sans","Helvetica Neue","Segoe UI",-apple-system,system-ui,ui-sans-serif,sans-serif;
+  --font-display:"Obol Sans","Helvetica Neue","Segoe UI",-apple-system,system-ui,ui-sans-serif,sans-serif;
+  --font-num:"Obol Mono","JetBrains Mono","SF Mono","Cascadia Mono",ui-monospace,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.22,1,.36,1); --spring:cubic-bezier(.34,1.42,.5,1); --fast:150ms;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding:20px 22px 52px;background:var(--bg);color:var(--fg);
+  font:13.5px/1.58 var(--font-ui);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;
+  background-image:radial-gradient(120% 80% at 50% -10%, rgba(67,197,149,.05), transparent 60%);}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:"tnum" 1,"zero" 1}
+.dim{color:var(--fg-2)} .faint{color:var(--fg-3)} .small{font-size:11.5px;letter-spacing:.005em}
+.green{color:var(--accent)} .amber{color:var(--amber)} .red{color:var(--red)} .teal{color:var(--c-cacheRead)}
+.label{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--fg-3);font-weight:500}
+
+/* toolbar */
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:8px}
+.brand .mark{display:block;flex:0 0 auto;filter:drop-shadow(0 0 10px rgba(67,197,149,.35))}
+.brand .wordmark{font-family:var(--font-display);font-size:16px;font-weight:700;letter-spacing:-.01em;color:var(--fg);line-height:1}
+.brand .ver{font-family:var(--font-num);font-size:11px;font-weight:400;color:var(--faint);letter-spacing:0;align-self:center}
+.actions{display:flex;gap:8px}
+
+/* hero */
+.hero{position:relative;text-align:center;padding:30px 18px 34px;margin-bottom:14px;min-height:168px;display:flex;align-items:center;justify-content:center}
+.spinner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:11px;transition:opacity .35s var(--ease)}
+.spinner.done{opacity:0;pointer-events:none}
+.ring{width:15px;height:15px;border-radius:50%;border:2px solid var(--hair);border-top-color:var(--accent);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.phase{color:var(--fg-2);font-size:13px;letter-spacing:.01em}
+.phase::after{content:"";display:inline-block;width:1ch;text-align:left;animation:dots 1.2s steps(4,end) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+.reveal{opacity:0;transform:translateY(8px) scale(.985);transition:opacity .5s var(--ease),transform .55s var(--spring)}
+.reveal.show{opacity:1;transform:none}
+.kicker{color:var(--fg-2);font-size:12.5px;margin-bottom:10px;display:inline-flex;align-items:center;gap:7px}
+.badge{font-size:10px;font-weight:500;color:var(--accent);border:1px solid rgba(67,197,149,.4);background:var(--accent-soft);border-radius:999px;padding:2px 8px;letter-spacing:.02em}
+.badge.green{color:var(--accent)} .badge.big{font-size:13px;display:inline-block}
+.tag{font-family:var(--font-ui);font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid currentColor;margin-left:4px;letter-spacing:.02em;opacity:.9}
+.tag.green{color:var(--accent)} .tag.amber{color:var(--amber)} .tag.soft{color:var(--faint);border-color:var(--hair)}
+.bigsaved{font-family:var(--font-num);font-variant-numeric:tabular-nums slashed-zero;font-size:56px;font-weight:500;letter-spacing:-.03em;line-height:1.02;color:var(--accent);margin:2px 0;text-shadow:0 0 40px rgba(67,197,149,.18)}
+.bigsaved.amber{color:var(--amber);text-shadow:0 0 40px rgba(216,165,89,.16)}
+.bigsaved .cur{font-size:30px;vertical-align:7px;margin-right:1px;font-weight:400;opacity:.75}
+.sub{font-size:12.5px;margin-top:8px;color:var(--fg-2)}
+
+/* cards */
+.card{position:relative;background:var(--surface);border:1px solid var(--hair);border-radius:13px;padding:17px 19px;margin:0 0 12px;box-shadow:var(--shadow)}
+.card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;border-radius:13px 13px 0 0;background:linear-gradient(90deg,transparent,var(--inset) 18%,var(--inset) 82%,transparent)}
+.card.empty{text-align:center;padding:46px 26px}
+.emptymark{display:flex;justify-content:center;margin:0 auto 14px;filter:drop-shadow(0 0 16px rgba(67,197,149,.4))}
+
+/* activity */
+.ahead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.seg{position:relative;display:inline-flex;background:var(--bg);border:1px solid var(--hair);border-radius:10px;padding:3px}
+.seg-ind{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:7px;background:var(--surface-3);box-shadow:0 1px 2px rgba(0,0,0,.4),inset 0 1px 0 var(--inset);transition:transform .42s var(--spring),width .42s var(--spring);z-index:0}
+.opt{position:relative;z-index:1;background:none;border:0;color:var(--fg-2);font:inherit;font-size:11.5px;padding:5px 13px;border-radius:7px;cursor:pointer;transition:color var(--fast) var(--ease)}
+.opt:hover{color:var(--fg)} .opt.active{color:var(--fg)}
+.stats{display:flex;gap:30px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}
+.stat b{font-family:var(--font-num);font-variant-numeric:tabular-nums slashed-zero;font-size:22px;font-weight:500;margin-right:7px;letter-spacing:-.02em}
+.stat .dim{font-size:12px}
+.range-note{margin-left:auto;font-family:var(--font-num);letter-spacing:0}
+.stacked{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--bg);box-shadow:inset 0 0 0 1px var(--hair-2);gap:1.5px}
+.seg-b{display:block;height:100%;transition:width .6s var(--ease);min-width:0}
+.seg-b.cacheRead{background:var(--c-cacheRead)} .seg-b.cacheWrite{background:var(--c-cacheWrite)}
+.seg-b.input{background:var(--c-input)} .seg-b.output{background:var(--c-output)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:11px;color:var(--fg-2);font-size:11px}
+.leg{display:inline-flex;align-items:center;gap:6px;transition:color var(--fast)} .leg:hover{color:var(--fg)}
+.leg .v{font-family:var(--font-num);color:var(--fg-3)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:2.5px}
+.dot.cacheRead{background:var(--c-cacheRead)} .dot.cacheWrite{background:var(--c-cacheWrite)}
+.dot.input{background:var(--c-input)} .dot.output{background:var(--c-output)}
+.trend{margin-top:16px}
+.sparkline{display:flex;align-items:flex-end;gap:3px;height:40px}
+.spark{flex:1;background:#23383e;border-radius:2px 2px 0 0;min-height:7%;transition:height .55s var(--ease),background var(--fast)}
+.spark:hover{background:var(--c-cacheRead)} .spark.peak{background:var(--c-cacheRead)}
+
+/* tracks / bars */
+.track{display:block;height:6px;border-radius:4px;background:var(--bg);overflow:hidden;box-shadow:inset 0 0 0 1px var(--hair-2)}
+.track.tall{height:9px;margin:9px 0 2px}
+.fill{display:block;height:100%;border-radius:4px;width:0}
+.fill.grow{transition:width .75s var(--ease)}
+.fill.green{background:var(--accent)} .fill.amber{background:var(--amber)}
+.fill.red{background:var(--red)} .fill.teal{background:var(--c-cacheRead)}
+
+/* disclosure */
+.detail{margin-top:2px} .detail[hidden]{display:none}
+.chev{display:inline-block;transition:transform .3s var(--spring);transform:translateY(-1px)}
+#moreBtn[aria-expanded="true"] .chev{transform:rotate(90deg) translateX(-1px)}
+
+/* detail bits */
+.fp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.fp-traits{font-size:15px;font-weight:500;margin-top:3px}
+.fp-score b{font-family:var(--font-num);font-size:24px;font-weight:500} .grade{margin-left:8px;font-weight:500}
+.receipt .rhead{display:flex;gap:10px;align-items:center;margin-bottom:6px}
+.savings b{font-family:var(--font-num);font-size:17px;font-weight:500} .savings{margin-bottom:3px}
+.chead{margin-bottom:13px;font-size:13.5px}
+.finding{padding:11px 0;border-top:1px solid var(--hair-2)} .finding:first-child{border-top:0}
+.frow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.frow b{font-weight:500}
+.frow .save{margin-left:auto;font-family:var(--font-num);font-weight:500}
+.finding .track{margin:8px 0 6px} .fmsg{margin:3px 0;color:var(--fg)}
+.srow{display:grid;grid-template-columns:74px 1fr auto auto;gap:11px;align-items:center;margin:7px 0;padding:3px 6px;margin-left:-6px;margin-right:-6px;border-radius:7px;transition:background var(--fast)}
+.srow:hover{background:var(--surface-2)}
+.sid{color:var(--fg-2);font-family:var(--font-num);font-size:12px} .scost{font-family:var(--font-num);font-weight:500}
+.arow,.nrow,.grow2{padding:10px 0;border-top:1px solid var(--hair-2)}
+.arow:first-child,.nrow:first-child,.grow2:first-child{border-top:0}
+.arow b,.nrow b,.grow2 b{font-weight:500}
+.asum{margin:3px 0}
+.row{display:flex;gap:10px;margin:15px 0 2px;flex-wrap:wrap} .row.center{justify-content:center}
+
+/* buttons — reactive: ease-out hover, instant snap on press */
+.btn{font-family:var(--font-ui);background:var(--surface-2);color:var(--fg);border:1px solid var(--hair);border-radius:9px;padding:7px 14px;font-size:12.5px;cursor:pointer;
+  transition:border-color var(--fast) var(--ease),background var(--fast) var(--ease),transform 60ms var(--ease),box-shadow var(--fast)}
+.btn:hover{border-color:var(--fg-3);background:var(--surface-3)}
+.btn:active{transform:translateY(1px) scale(.985);transition-duration:40ms}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:500;box-shadow:0 1px 0 rgba(255,255,255,.15) inset,0 6px 18px -10px rgba(67,197,149,.8)}
+.btn.primary:hover{background:var(--accent-2);box-shadow:0 1px 0 rgba(255,255,255,.18) inset,0 8px 22px -10px rgba(67,197,149,.9)}
+.btn.ghost{background:none;border:1px solid var(--hair);color:var(--fg-2)}
+.btn.ghost:hover{color:var(--fg);border-color:var(--fg-3);background:var(--surface)}
+.btn.link{background:none;border:0;color:var(--accent);padding:0 4px;text-decoration:underline;cursor:pointer}
+.foot{margin-top:13px;line-height:1.75}
+code{background:var(--bg);padding:1px 6px;border-radius:5px;color:var(--accent);font-family:var(--font-num);font-size:12px;border:1px solid var(--hair-2)}
+h2{font-family:var(--font-display);font-size:17px;font-weight:500;letter-spacing:-.01em;margin:8px 0}
+.empty p{color:var(--fg-2);max-width:34ch;margin:6px auto 0}
+
+@media (prefers-reduced-motion: reduce){
+  .ring{animation:none} .phase::after{animation:none}
+  .reveal,.fill.grow,.seg-b,.spark,.seg-ind,.chev,.btn,.pseg-ind,.tgl .knob::after,.adv summary::before{transition:none}
+}
+
+/* ---- profile control (Step 4) ---- */
+.tag.off{color:var(--faint);border-color:var(--hair);opacity:1}
+.badge.amber{color:var(--amber);border-color:rgba(216,165,89,.4);background:var(--amber-soft)}
+.finding.muted{opacity:.5}
+.finding.muted .track,.finding.muted .fmsg{opacity:.85}
+.card.profile .chead{margin-bottom:11px}
+.pseg-wrap{position:relative;display:flex;gap:0;background:var(--bg);border:1px solid var(--hair);border-radius:10px;padding:3px;width:100%;max-width:360px}
+.pseg{position:relative;z-index:1;flex:1;background:none;border:0;color:var(--fg-2);font:500 12px/1 var(--font-ui);letter-spacing:.01em;padding:8px 6px;border-radius:7px;cursor:pointer;transition:color var(--fast) var(--ease)}
+.pseg:hover{color:var(--fg)}
+.pseg.on{color:var(--fg)}
+.pseg:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pseg-ind{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;width:calc((100% - 6px)/3);border-radius:7px;
+  background:var(--surface-3);box-shadow:0 1px 2px rgba(0,0,0,.4),inset 0 1px 0 var(--inset);
+  transition:transform .42s var(--spring)}
+.pseg-wrap[data-pos="0"] .pseg-ind{transform:translateX(0)}
+.pseg-wrap[data-pos="1"] .pseg-ind{transform:translateX(100%)}
+.pseg-wrap[data-pos="2"] .pseg-ind{transform:translateX(200%)}
+.pmeta{margin-top:9px}
+.adv{margin-top:13px;border-top:1px solid var(--hair-2);padding-top:11px}
+.adv summary{cursor:pointer;color:var(--fg-2);font-size:12px;list-style:none;user-select:none;transition:color var(--fast) var(--ease)}
+.adv summary:hover{color:var(--fg)}
+.adv summary::-webkit-details-marker{display:none}
+.adv summary::before{content:"›";display:inline-block;margin-right:7px;color:var(--fg-3);transition:transform var(--fast) var(--ease)}
+.adv[open] summary::before{transform:rotate(90deg)}
+.tgls{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:11px}
+@media (max-width:520px){.tgls{grid-template-columns:1fr}}
+.tgl{display:flex;align-items:center;gap:9px;text-align:left;background:var(--surface-2);border:1px solid var(--hair);border-radius:9px;padding:9px 11px;cursor:pointer;color:var(--fg-2);font:inherit;transition:border-color var(--fast) var(--ease),background var(--fast) var(--ease)}
+.tgl:hover{border-color:var(--fg-3);background:var(--surface-3)}
+.tgl:active{transform:translateY(1px) scale(.99);transition-duration:40ms}
+.tgl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tgl .knob{position:relative;flex:0 0 auto;width:30px;height:17px;border-radius:999px;background:var(--surface-3);border:1px solid var(--hair);transition:background var(--fast) var(--ease),border-color var(--fast) var(--ease)}
+.tgl .knob::after{content:"";position:absolute;top:1px;left:1px;width:13px;height:13px;border-radius:50%;background:var(--fg-3);box-shadow:0 1px 2px rgba(0,0,0,.5);transition:transform var(--fast) var(--spring),background var(--fast) var(--ease)}
+.tgl.on{color:var(--fg)}
+.tgl.on .knob{background:var(--accent-soft);border-color:rgba(67,197,149,.45)}
+.tgl.on .knob::after{transform:translateX(13px);background:var(--accent)}
+.tgl .tname{flex:1;font-size:12px;font-weight:500;line-height:1.2}
+.tgl .tcode{flex:0 0 auto}
+
+/* ---- savings history (Step 5) ---- */
+.card.history .chead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.streak{margin-left:auto;font-size:11px;color:var(--amber);border:1px solid rgba(216,165,89,.4);background:var(--amber-soft);border-radius:999px;padding:2px 9px;display:inline-flex;align-items:center;gap:5px;letter-spacing:.01em}
+.streak .flame{font-size:9px;transform:translateY(-.5px)}
+.hgrid{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end;margin:4px 0 13px}
+.hstat{display:flex;flex-direction:column;gap:2px;min-width:0}
+.hstat b{font-family:var(--font-num);font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1;font-variant-numeric:tabular-nums}
+.hstat.big b{font-size:30px}
+.hstat span{font-size:11px}
+.card.history .spark{display:block;width:100%;height:38px;opacity:.95}
+
+/* ---- share card (Step 6) ---- */
+.share-ov{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:28px 20px;overflow:auto;
+  background:rgba(5,6,7,.74);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);animation:ovin var(--fast) var(--ease)}
+@keyframes ovin{from{opacity:0}to{opacity:1}}
+.share-modal{width:min(680px,96vw);margin:auto;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px;box-shadow:0 1px 1px rgba(0,0,0,.5),0 24px 70px -28px rgba(0,0,0,.85);animation:popin .22s var(--spring)}
+@keyframes popin{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+.share-head{display:flex;align-items:center;gap:9px;margin-bottom:14px}
+.share-head .xclose{margin-left:auto;padding:5px 12px;font-size:11.5px;line-height:1;font-weight:500}
+.card-wrap{border-radius:12px;overflow:hidden;border:1px solid var(--hair);background:#0a0b0c}
+.card-wrap svg{display:block;width:100%;height:auto}
+.share-actions{margin-top:14px;gap:9px}
+@media (prefers-reduced-motion: reduce){ .share-ov,.share-modal{animation:none} }
+
+/* ---- leaderboard (Step 7) ---- */
+.card.leaderboard .chead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lblist{display:flex;flex-direction:column;gap:1px;margin:6px 0 12px;border:1px solid var(--hair);border-radius:10px;overflow:hidden}
+.lbrow{display:flex;align-items:center;gap:11px;padding:9px 13px;background:var(--surface-2)}
+.lbrow:nth-child(even){background:var(--surface)}
+.lbrow.mine{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+.lbrank{font-family:var(--font-num);font-size:12px;color:var(--fg-3);width:22px;text-align:right;font-variant-numeric:tabular-nums}
+.lbname{flex:1;font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lbsave{font-family:var(--font-num);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.lbwall{margin-top:10px;padding-top:10px;border-top:1px solid var(--hair-2)}
+.card.leaderboard.optin .dim.small.mono{margin-top:10px;color:var(--faint)}
+
+/* ---- live activity ticker (Step 8) ---- */
+.activity{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:9px 14px;
+  background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--hair);
+  border-radius:11px;box-shadow:var(--shadow);min-height:40px}
+.activity .adot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:var(--accent);position:relative}
+.activity .adot::after{content:"";position:absolute;inset:-4px;border-radius:50%;background:var(--accent);opacity:.35;animation:pulse 1.6s var(--ease) infinite}
+@keyframes pulse{0%{transform:scale(.7);opacity:.45}70%{transform:scale(1.9);opacity:0}100%{opacity:0}}
+.activity .adot.k-model{background:var(--amber)} .activity .adot.k-model::after{background:var(--amber)}
+.activity .adot.k-git{background:#7aa2f7} .activity .adot.k-git::after{background:#7aa2f7}
+.activity .adot.k-test{background:#c39bd3} .activity .adot.k-test::after{background:#c39bd3}
+.activity .adot.k-done{background:var(--accent);animation:none} .activity.done .adot::after{animation:none;opacity:0}
+.activity .alabel{font-size:12.5px;font-weight:500;color:var(--fg);transition:opacity var(--fast) var(--ease),transform var(--fast) var(--ease)}
+.activity .alabel.swap{opacity:0;transform:translateY(-3px)}
+.activity .aspacer{flex:1 1 auto}
+.activity .asaved{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.activity .asaved b{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:13px;transition:transform var(--fast) var(--spring)}
+.activity .asaved b.bump{transform:scale(1.18)}
+.activity.done{border-color:rgba(67,197,149,.4);background:linear-gradient(180deg,var(--accent-soft),var(--surface))}
+@media (prefers-reduced-motion: reduce){ .activity .adot::after{animation:none} }
+</style></head>
+<body>
+${toolbar}
+${activityStrip}
+${top}
+${discloser}
+${shareSection}
+<script nonce="${n}">
+(function(){
+  var vscode = acquireVsCodeApi();
+  var DATA = ${data};
+  var ACT = ${act ? JSON.stringify(act) : "null"};
+
+  function hideShare(){ var o = document.getElementById('shareOv'); if (o) o.setAttribute('hidden',''); }
+  function showShare(){ var o = document.getElementById('shareOv'); if (o){ o.removeAttribute('hidden'); o.scrollTop = 0; } }
+  document.addEventListener('click', function(e){
+    // close share from any element flagged data-close (backdrop, ✕, Done) — bulletproof
+    var c = e.target.closest('[data-close]');
+    if (c){ if (e.target === c || c.id === 'shareClose' || c.tagName === 'BUTTON') { hideShare(); return; } }
+    if (e.target.id === 'shareBtn'){ showShare(); return; }
+    var b = e.target.closest('[data-cmd]');
+    if (b){ var m = { cmd: b.getAttribute('data-cmd') }; var id = b.getAttribute('data-id'); if (id) m.id = id; vscode.postMessage(m); }
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') hideShare(); });
+
+  // ---- live activity ticker ----
+  (function(){
+    var strip = document.getElementById('activity');
+    var labelEl = document.getElementById('aLabel');
+    var dotEl = document.getElementById('aDot');
+    var savedWrap = document.getElementById('aSaved');
+    var savedNumEl = document.getElementById('aSavedNum');
+    if (!strip) return;
+    var money = function(v){ return '$' + (v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+    var sessSaved = 0;
+    var reduceA = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function setStatus(kind, label){
+      if (!labelEl) return;
+      strip.removeAttribute('hidden');
+      if (dotEl){ dotEl.className = 'adot k-' + (kind||'work'); }
+      if (kind === 'done'){ strip.classList.add('done'); } else { strip.classList.remove('done'); }
+      if (reduceA){ labelEl.textContent = label; return; }
+      labelEl.classList.add('swap');
+      setTimeout(function(){ labelEl.textContent = label; labelEl.classList.remove('swap'); }, 160);
+    }
+    function addSaved(delta){
+      if (!delta || delta <= 0) return;
+      sessSaved += delta;
+      if (savedWrap) savedWrap.removeAttribute('hidden');
+      if (!savedNumEl) return;
+      if (reduceA){ savedNumEl.textContent = money(sessSaved); flash(); return; }
+      var from = sessSaved - delta, t0 = null, dur = 600;
+      (function step(ts){ if(t0===null)t0=ts; var p=Math.min(1,(ts-t0)/dur), e=1-Math.pow(1-p,3);
+        savedNumEl.textContent = money(from + delta*e); if(p<1) requestAnimationFrame(step); else { savedNumEl.textContent=money(sessSaved); flash(); } })(0+performance.now());
+    }
+    function flash(){ if(!savedNumEl) return; savedNumEl.classList.add('bump'); setTimeout(function(){ savedNumEl.classList.remove('bump'); }, 420); }
+
+    // apply one event (from the simulator or a live message)
+    function apply(ev){ if(!ev) return; setStatus(ev.kind, ev.label); if (ev.savedUSD) addSaved(ev.savedUSD); }
+
+    // live messages from the extension: { cmd:'activity', event:{...} } or batch
+    window.addEventListener('message', function(e){
+      var m = e.data; if (!m) return;
+      if (m.cmd === 'activity' && m.event) apply(m.event);
+      else if (m.cmd === 'activityBatch' && m.events) m.events.forEach(apply);
+    });
+
+    // demo/preview: run the scripted sequence on a gentle cadence so it's watchable
+    if (ACT && ACT.demo && ACT.sequence && ACT.sequence.length){
+      var i = 0;
+      function tick(){
+        if (i >= ACT.sequence.length){ setTimeout(function(){ i=0; sessSaved=0; if(savedWrap) savedWrap.setAttribute('hidden',''); tick(); }, 2600); return; }
+        apply(ACT.sequence[i]); i++;
+        setTimeout(tick, reduceA ? 1500 : 1350);
+      }
+      setTimeout(tick, 600);
+    }
+  })();
+
+  // ---- share card ----
+  function currentSvgString(){
+    var svg = document.querySelector('#cardWrap svg');
+    if (!svg) return '';
+    return new XMLSerializer().serializeToString(svg);
+  }
+  function rasterize(cb){
+    var xml = currentSvgString(); if(!xml){ cb(null); return; }
+    var blob = new Blob([xml], { type:'image/svg+xml;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function(){
+      var scale = 2, c = document.createElement('canvas');
+      c.width = 1200*scale; c.height = 630*scale;
+      var ctx = c.getContext('2d'); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0, 1200, 630);
+      URL.revokeObjectURL(url);
+      try { cb(c.toDataURL('image/png')); } catch(err){ cb(null); }
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); cb(null); };
+    img.src = url;
+  }
+  var savePng = document.getElementById('savePng');
+  if (savePng) savePng.addEventListener('click', function(){
+    rasterize(function(dataUrl){
+      if (!dataUrl){ vscode.postMessage({ cmd:'saveCard', fmt:'svg', data: currentSvgString() }); return; }
+      vscode.postMessage({ cmd:'saveCard', fmt:'png', data: dataUrl });
+    });
+  });
+  var saveSvg = document.getElementById('saveSvg');
+  if (saveSvg) saveSvg.addEventListener('click', function(){
+    vscode.postMessage({ cmd:'saveCard', fmt:'svg', data: currentSvgString() });
+  });
+  var copyPng = document.getElementById('copyPng');
+  if (copyPng) copyPng.addEventListener('click', function(){
+    rasterize(function(dataUrl){
+      if (dataUrl && navigator.clipboard && window.ClipboardItem){
+        fetch(dataUrl).then(function(r){return r.blob();}).then(function(blob){
+          navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function(){
+            copyPng.textContent = 'Copied ✓'; setTimeout(function(){ copyPng.textContent='Copy image'; }, 1400);
+          }).catch(function(){ copyPng.textContent='Copy unavailable'; setTimeout(function(){ copyPng.textContent='Copy image'; },1400); });
+        });
+      } else { copyPng.textContent='Copy unavailable'; setTimeout(function(){ copyPng.textContent='Copy image'; },1400); }
+    });
+  });
+
+  // progressive disclosure
+  var moreBtn = document.getElementById('moreBtn');
+  if (moreBtn){
+    moreBtn.addEventListener('click', function(){
+      var d = document.getElementById('detail');
+      var open = !d.hasAttribute('hidden');
+      var lab = moreBtn.querySelector('.more-label');
+      if (open){ d.setAttribute('hidden',''); if(lab) lab.textContent='View full report'; moreBtn.setAttribute('aria-expanded','false'); }
+      else { d.removeAttribute('hidden'); if(lab) lab.textContent='Hide report'; moreBtn.setAttribute('aria-expanded','true'); growBars(d); }
+    });
+  }
+
+  function growBars(scope){
+    var bars = (scope||document).querySelectorAll('.fill.grow');
+    requestAnimationFrame(function(){ bars.forEach(function(el){ el.style.width = (el.style.getPropertyValue('--w')||'0'); }); });
+  }
+
+  if (!DATA) return;
+
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var fmtUsd = function(v){ var s=(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); return s; };
+  var fmtTok = function(v){ v=v||0; if(v>=1e9)return (v/1e9).toFixed(1).replace(/\\.0$/,'')+'B'; if(v>=1e6)return (v/1e6).toFixed(1).replace(/\\.0$/,'')+'M'; if(v>=1e3)return (v/1e3).toFixed(0)+'k'; return String(Math.round(v)); };
+
+  // count-up odometer (cubic ease-out)
+  function countUp(el, to, money){
+    if (!el) return;
+    if (reduce){ el.textContent = money ? to.toFixed(2) : fmtTok(to); return; }
+    var from = 0, dur = 900, t0 = null;
+    function step(ts){
+      if (t0===null) t0=ts;
+      var p = Math.min(1,(ts-t0)/dur), e = 1-Math.pow(1-p,3);
+      var v = from + (to-from)*e;
+      el.textContent = money ? v.toFixed(2) : fmtTok(v);
+      if (p<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // hero reveal: tiny staged spinner, then count up the saved number
+  var phases = ['reading logs','diagnosing','pricing'];
+  var spinner = document.getElementById('spinner');
+  var reveal = document.getElementById('reveal');
+  var phaseEl = document.getElementById('phase');
+  var savedEl = document.getElementById('savedNum');
+  var savedTo = savedEl ? parseFloat(savedEl.getAttribute('data-to'))||0 : 0;
+  function finishHero(){
+    if (spinner) spinner.classList.add('done');
+    if (reveal) reveal.classList.add('show');
+    countUp(savedEl, savedTo, true);
+  }
+  if (reduce || !spinner){ finishHero(); }
+  else {
+    var i=0;
+    var iv = setInterval(function(){ i++; if(i<phases.length){ phaseEl.textContent=phases[i]; } else { clearInterval(iv); finishHero(); } }, 360);
+  }
+
+  // ---- windowing ----
+  function windowOf(range){
+    var d = DATA.days;
+    if (range==='all' || !d.length) return Object.assign({}, DATA.all, {label: DATA.all.first && DATA.all.last ? DATA.all.first+' \\u2192 '+DATA.all.last : ''});
+    var last = d[d.length-1].date;
+    var lastT = Date.parse(last);
+    var cut = lastT - (parseInt(range,10)-1)*86400000;
+    var sel = d.filter(function(x){ var t=Date.parse(x.date); return !isNaN(t) && t>=cut; });
+    var agg = {cost:0,input:0,output:0,cacheWrite:0,cacheRead:0};
+    sel.forEach(function(x){ agg.cost+=x.cost; agg.input+=x.input; agg.output+=x.output; agg.cacheWrite+=x.cacheWrite; agg.cacheRead+=x.cacheRead; });
+    agg.tokens = agg.input+agg.output+agg.cacheWrite+agg.cacheRead;
+    agg.sessions = sel.length;
+    agg.label = sel.length ? sel[0].date+' \\u2192 '+last : 'no days in range';
+    agg._days = sel;
+    return agg;
+  }
+
+  var COMP = [
+    {k:'cacheRead', name:'cache read'},
+    {k:'cacheWrite',name:'cache write'},
+    {k:'input',     name:'input'},
+    {k:'output',    name:'output'}
+  ];
+  var compEl = document.getElementById('comp');
+  var legEl = document.getElementById('legend');
+  var trendEl = document.getElementById('trend');
+  var spentEl = document.getElementById('aSpent');
+  var tokEl = document.getElementById('aTokens');
+  var daysEl = document.getElementById('aDays');
+  var spanEl = document.getElementById('aSpan');
+
+  function pctOf(v,t){ return t? Math.round(v/t*100):0; }
+
+  function renderComp(w){
+    var total = (w.input+w.output+w.cacheWrite+w.cacheRead)||1;
+    // build segments once, then animate widths
+    if (!compEl.dataset.built){
+      compEl.innerHTML = COMP.map(function(c){ return '<span class="seg-b '+c.k+'" data-k="'+c.k+'" style="width:0"></span>'; }).join('');
+      compEl.dataset.built='1';
+    }
+    requestAnimationFrame(function(){
+      COMP.forEach(function(c){
+        var el = compEl.querySelector('[data-k="'+c.k+'"]');
+        if (el) el.style.width = (w[c.k]/total*100)+'%';
+      });
+    });
+    legEl.innerHTML = COMP.map(function(c){ return '<span class="leg"><i class="dot '+c.k+'"></i>'+c.name+' <span class="v">'+pctOf(w[c.k],total)+'%</span></span>'; }).join('');
+  }
+
+  function renderTrend(w){
+    var days = (w._days && w._days.length>1) ? w._days : (DATA.days.length>1 ? DATA.days : null);
+    if (!days){ trendEl.innerHTML=''; return; }
+    var max = Math.max.apply(null, days.map(function(d){return d.cost;})) || 1;
+    var peak = days.reduce(function(m,d){return d.cost>m.cost?d:m;}, days[0]);
+    var bars = days.map(function(d){ var h=Math.max(8,d.cost/max*100); var pk=d.date===peak.date?' peak':''; return '<span class="spark'+pk+'" style="height:'+h+'%" title="'+d.date+' '+fmtUsd(d.cost)+'"></span>'; }).join('');
+    trendEl.innerHTML = '<div class="sparkline">'+bars+'</div><div class="dim small" style="margin-top:6px">daily spend \\u00b7 peak '+fmtUsd(peak.cost)+' on '+peak.date+'</div>';
+  }
+
+  var curSpent = 0;
+  function animateSpent(to){
+    if (reduce){ spentEl.textContent=fmtUsd(to); curSpent=to; return; }
+    var from=curSpent, dur=600, t0=null;
+    function step(ts){ if(t0===null)t0=ts; var p=Math.min(1,(ts-t0)/dur), e=1-Math.pow(1-p,3); var v=from+(to-from)*e; spentEl.textContent=fmtUsd(v); if(p<1)requestAnimationFrame(step); else curSpent=to; }
+    requestAnimationFrame(step);
+  }
+
+  function apply(range){
+    var w = windowOf(range);
+    animateSpent(w.cost);
+    if (tokEl) tokEl.textContent = fmtTok(w.tokens);
+    if (daysEl) daysEl.textContent = (range==='all') ? DATA.all.sessions : (w.sessions+' day'+(w.sessions===1?'':'s'));
+    if (spanEl) spanEl.textContent = (w.label||'').replace('\\u2192','→');
+    renderComp(w);
+    renderTrend(w);
+  }
+
+  // initial paint (all-time)
+  apply('all');
+
+  var seg = document.getElementById('rangeSeg');
+  var segInd = document.getElementById('segInd');
+  function moveInd(btn){
+    if (!segInd || !btn) return;
+    var pl = parseFloat(getComputedStyle(seg).paddingLeft) || 3;
+    segInd.style.width = btn.offsetWidth + 'px';
+    segInd.style.transform = 'translateX(' + (btn.offsetLeft - pl) + 'px)';
+  }
+  if (seg){
+    var active0 = seg.querySelector('.opt.active') || seg.querySelector('.opt');
+    requestAnimationFrame(function(){ moveInd(active0); });
+    seg.addEventListener('click', function(e){
+      var b = e.target.closest('[data-range]'); if(!b) return;
+      seg.querySelectorAll('.opt').forEach(function(o){o.classList.remove('active');});
+      b.classList.add('active');
+      moveInd(b);
+      apply(b.getAttribute('data-range'));
+    });
+    window.addEventListener('resize', function(){ moveInd(seg.querySelector('.opt.active')); });
+  }
+})();
+</script>
+</body></html>`;
+}
+
+module.exports = { buildHtml };

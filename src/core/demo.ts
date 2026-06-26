@@ -80,6 +80,10 @@ function session(s: DemoSession): SessionUsage {
   };
 }
 
+function totalTokensFromTotals(t: TokenCounts): number {
+  return t.input + t.output + t.cacheWrite + t.cacheRead;
+}
+
 /** A complete, valid UsageSummary that exercises every surface. */
 export function demoUsage(): UsageSummary {
   const byModel: ModelUsage[] = [
@@ -98,11 +102,33 @@ export function demoUsage(): UsageSummary {
     counts(0, 0, 0, 0),
   );
 
-  const byDay: DayUsage[] = DAYS.map(([date, costUSD]) => ({
-    date,
-    costUSD,
-    tokens: Math.round(costUSD * 90_000), // rough tokens-per-dollar back-of-envelope
-  }));
+  // Split each day's tokens across the four buckets using the global mix,
+  // so the windowed composition bar stays believable for any date range.
+  // Day costs are rescaled to reconcile exactly with the model totals — real
+  // logs reconcile naturally (same events feed both), so the demo must too.
+  const totalCostUSDpre = byModel.reduce((a, m) => a + m.costUSD, 0);
+  const daysSum = DAYS.reduce((a, [, c]) => a + c, 0) || 1;
+  const dayScale = totalCostUSDpre / daysSum;
+  const mix = {
+    input: totals.input, output: totals.output,
+    cacheWrite: totals.cacheWrite, cacheRead: totals.cacheRead,
+  };
+  const mixTotal = mix.input + mix.output + mix.cacheWrite + mix.cacheRead;
+  const tokScale = totalTokensFromTotals(totals) / (DAYS.reduce((a, [, c]) => a + c * dayScale, 0) || 1);
+  const byDay: DayUsage[] = DAYS.map(([date, rawCost]) => {
+    const costUSD = rawCost * dayScale;
+    const tokens = Math.round(costUSD * tokScale);
+    const part = (n: number) => Math.round((tokens * n) / mixTotal);
+    return {
+      date,
+      costUSD,
+      tokens,
+      input: part(mix.input),
+      output: part(mix.output),
+      cacheWrite: part(mix.cacheWrite),
+      cacheRead: part(mix.cacheRead),
+    };
+  });
 
   const bySession = SESSIONS.map(session).sort((a, b) => b.costUSD - a.costUSD);
 

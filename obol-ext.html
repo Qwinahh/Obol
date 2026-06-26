@@ -1,0 +1,156 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>obol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+*{box-sizing:border-box;margin:0}
+:root{
+--bg:#0a0a0a;--hair:#1c1c1c;--hair2:#161616;
+--fg:#f6f6f6;--fg2:#9a9a9a;--fg3:#646464;--faint:#3a3a3a;
+--disp:'Space Grotesk',system-ui,sans-serif;
+--sans:'Manrope',system-ui,sans-serif;
+--mono:'JetBrains Mono',ui-monospace,monospace;
+--ease:cubic-bezier(.22,1,.36,1);}
+html,body{background:#060606}
+body{font-family:var(--sans);color:var(--fg);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+display:flex;justify-content:center;padding:34px 20px 90px}
+.w{width:432px;max-width:100%}
+.eb{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--fg3)}
+
+.hd{display:flex;align-items:center;margin-bottom:52px}
+.wm{font-family:var(--disp);font-weight:700;font-size:27px;letter-spacing:-.03em;color:var(--fg);line-height:1}
+.hd .sp{flex:1}
+.hd button{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg2);background:none;border:0;padding:6px 2px;cursor:pointer;transition:color .15s var(--ease)}
+.hd button:hover{color:var(--fg)}
+.hd .g{width:1px;height:11px;background:var(--hair);margin:0 12px}
+
+.hero{margin-bottom:54px}
+.hero .eb{margin-bottom:18px}
+.money{font-family:var(--disp);font-size:84px;font-weight:700;letter-spacing:-.04em;line-height:.9;font-variant-numeric:tabular-nums}
+.money .c{font-size:38px;font-weight:500;color:var(--fg2);vertical-align:top;margin-right:3px}
+.hero .sub{margin-top:18px;font-size:13px;color:var(--fg2);line-height:1.5}
+.hero .sub b{color:var(--fg);font-weight:700}
+
+.lh{display:flex;align-items:center;gap:9px;margin-bottom:15px}
+.lh .dot{width:6px;height:6px;border-radius:50%;background:var(--fg);position:relative}
+.lh .dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;background:var(--fg);opacity:.3;animation:pp 1.7s var(--ease) infinite}
+.lh .now{font-size:13px;font-weight:600}
+.lh .sp{flex:1} .lh .ses{font-family:var(--mono);font-size:11px;color:var(--fg2)}
+.tape{font-family:var(--mono);font-size:11.5px;line-height:2.4;color:var(--fg2)}
+.tape .r{display:flex;align-items:baseline;gap:10px;animation:in .5s var(--ease) both}
+.tape .vb{color:var(--fg)}
+.tape .dots{flex:1;border-bottom:1px dotted var(--hair);transform:translateY(-3px);min-width:14px}
+.tape .amt{color:var(--fg)} .tape .amt.z{color:var(--faint)}
+.tape .r.sub .vb{color:var(--fg2)}
+
+.div{height:1px;background:var(--hair2);margin:40px 0}
+
+.tally{display:flex}
+.tally .c{flex:1}
+.tally .c+.c{border-left:1px solid var(--hair);padding-left:18px}
+.tally .c:not(:last-child){margin-right:18px}
+.tally .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);margin-bottom:10px}
+.tally .v{font-family:var(--disp);font-size:25px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tally .v .u{font-family:var(--sans);font-size:12px;color:var(--fg2);font-weight:500;margin-left:6px;letter-spacing:0}
+.tally .v .cents{color:var(--fg2);font-weight:500}
+
+.sl{display:flex;align-items:baseline;margin-bottom:16px}
+.sl .note{margin-left:auto;font-size:11px;color:var(--fg3)}
+.sl .note b{color:var(--fg)}
+.seg{display:flex;gap:24px}
+.seg button{background:none;border:0;padding:0 0 9px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);cursor:pointer;border-bottom:1.5px solid transparent;transition:color .18s var(--ease),border-color .18s var(--ease)}
+.seg button:hover{color:var(--fg2)}
+.seg button.on{color:var(--fg);border-bottom-color:var(--fg)}
+
+#finds{display:flex;flex-direction:column;gap:16px;min-height:8px}
+.find{animation:in .4s var(--ease) both}
+.find .top{display:flex;align-items:baseline;gap:10px;margin-bottom:11px}
+.find .nm{font-size:14px;font-weight:700}
+.find .id{font-family:var(--mono);font-size:10px;color:var(--fg3);letter-spacing:.04em}
+.find .amt{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--fg)}
+.find .meter{height:2px;background:var(--hair);margin-bottom:12px;overflow:hidden}
+.find .meter i{display:block;height:100%;background:var(--fg);opacity:.55;width:0;transition:width .6s var(--ease)}
+.find p{font-size:12.5px;line-height:1.6;color:var(--fg2);max-width:44ch}
+.empty{font-size:12.5px;color:var(--fg3);line-height:1.6}
+
+.cta{display:flex;gap:10px;margin-top:30px}
+.cta .go{font-family:var(--sans);font-size:13px;font-weight:700;color:#0a0a0a;background:var(--fg);border:0;border-radius:9px;padding:12px 18px;cursor:pointer;transition:.15s var(--ease)}
+.cta .go:hover{background:#fff;transform:translateY(-1px)} .cta .go:active{transform:translateY(0)}
+.cta .go[disabled]{background:#222;color:#666;cursor:not-allowed;transform:none}
+.cta .gh{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--fg2);background:none;border:1px solid var(--hair);border-radius:9px;padding:12px 18px;cursor:pointer;transition:.15s var(--ease)}
+.cta .gh:hover{color:var(--fg);border-color:var(--fg3)}
+
+.ft{margin-top:42px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);line-height:1.9}
+@keyframes pp{0%{transform:scale(.7);opacity:.5}70%{transform:scale(2);opacity:0}100%{opacity:0}}
+@keyframes in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+</style></head><body><div class="w">
+
+  <div class="hd"><span class="wm">obol</span><span class="sp"></span>
+    <button>Analyze</button><span class="g"></span><button>Share</button></div>
+
+  <div class="hero">
+    <div class="eb">Saved by caching · lifetime</div>
+    <div class="money"><span class="c">$</span><span id="m">107.10</span></div>
+    <div class="sub"><b>38%</b> off your reused context, measured against your pricing.</div>
+  </div>
+
+  <div class="lh"><span class="dot"></span><span class="now" id="now">Writing code</span><span class="sp"></span><span class="ses" id="ses">+$0.06 this session</span></div>
+  <div class="tape" id="tape"></div>
+
+  <div class="div"></div>
+  <div class="tally">
+    <div class="c"><div class="k">All-time</div><div class="v">$107<span class="cents">.10</span></div></div>
+    <div class="c"><div class="k">Streak</div><div class="v">6<span class="u">days</span></div></div>
+    <div class="c"><div class="k">Runs</div><div class="v">18</div></div>
+  </div>
+
+  <div class="div"></div>
+  <div class="sl"><span class="eb">Profile</span><span class="note" id="pnote">how hard to chase</span></div>
+  <div class="seg" id="seg"><button data-p="careful">Careful</button><button data-p="balanced" class="on">Balanced</button><button data-p="aggressive">Aggressive</button></div>
+
+  <div class="div"></div>
+  <div class="sl"><span class="eb">Findings</span><span class="note" id="fnote">up to <b>$17.30</b></span></div>
+  <div id="finds"></div>
+
+  <div class="cta"><button class="go" id="apply">Apply 1 safe fix</button><button class="gh">Plan</button></div>
+  <div class="ft">deterministic · free · zero-token<br>no llm in the loop · runs on your machine</div>
+</div>
+<script>
+/* live tape */
+var A=[["Searching the codebase",0],["Ran on Sonnet",0.04,1],["Writing code",0],["Building the project",0],["Running tests",0],["Ran on Haiku",0.02,1],["Committing changes",0],["Finalizing GitHub push",0],["Reading files",0]];
+var tape=document.getElementById('tape'),now=document.getElementById('now'),ses=document.getElementById('ses'),m=document.getElementById('m');
+var i=0,s=0.06,t=107.10;
+function mn(v){return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function tick(){var a=A[i%A.length];i++;now.textContent=a[0];
+var r=document.createElement('div');r.className='r'+(a[2]?' sub':'');
+r.innerHTML='<span class="vb">'+a[0]+'</span><span class="dots"></span>'+(a[1]>0?'<span class="amt">+$'+mn(a[1])+'</span>':'<span class="amt z">—</span>');
+tape.appendChild(r);while(tape.children.length>4)tape.removeChild(tape.firstChild);
+if(a[1]>0){s+=a[1];t+=a[1];ses.textContent='+$'+mn(s)+' this session';var f=t-a[1],t0=null;
+(function rl(ts){if(t0===null)t0=ts;var p=Math.min(1,(ts-t0)/650),e=1-Math.pow(1-p,3);m.textContent=mn(f+a[1]*e);if(p<1)requestAnimationFrame(rl);})(performance.now());}
+setTimeout(tick,a[1]>0?1800:1250);}
+setTimeout(tick,700);
+
+/* REACTIVE profile -> findings */
+var P={
+ careful:{up:"$0.00",note:"only high-confidence wins",cta:"No safe fixes",dis:1,finds:[]},
+ balanced:{up:"$17.30",note:"high + medium confidence",cta:"Apply 1 safe fix",finds:[
+   {nm:"Prompt caching",id:"A1 · MED",amt:"$16.47",w:64,p:"A lot of input is re-sent at full price. Cache your stable prefix to claim the discount on reused context."}]},
+ aggressive:{up:"$33.56",note:"every detected win",cta:"Apply 3 safe fixes",finds:[
+   {nm:"Prompt caching",id:"A1 · MED",amt:"$16.47",w:64,p:"A lot of input is re-sent at full price. Cache your stable prefix to claim the discount."},
+   {nm:"Model tiering",id:"D1 · LOW",amt:"$9.35",w:36,p:"Route simple, mechanical turns to a cheaper model and keep Opus for the hard ones."},
+   {nm:"Output discipline",id:"C1 · LOW",amt:"$6.79",w:26,p:"Cap verbose generations with max_tokens; most answers don't need the full budget."}]}
+};
+var finds=document.getElementById('finds'),fnote=document.getElementById('fnote'),pnote=document.getElementById('pnote'),apply=document.getElementById('apply');
+function render(p){var d=P[p];pnote.textContent=d.note;fnote.innerHTML='up to <b>'+d.up+'</b>';
+ apply.textContent=d.cta;apply.disabled=!!d.dis;
+ finds.innerHTML='';
+ if(!d.finds.length){var e=document.createElement('div');e.className='empty';e.textContent='Nothing meets this confidence bar — switch to a looser profile to surface more.';finds.appendChild(e);return;}
+ d.finds.forEach(function(f){var el=document.createElement('div');el.className='find';
+  el.innerHTML='<div class="top"><span class="nm">'+f.nm+'</span><span class="id">'+f.id+'</span><span class="amt">'+f.amt+'</span></div><div class="meter"><i></i></div><p>'+f.p+'</p>';
+  finds.appendChild(el);requestAnimationFrame(function(){el.querySelector('i').style.width=f.w+'%';});});}
+document.getElementById('seg').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+ [].forEach.call(this.children,function(x){x.classList.remove('on');});b.classList.add('on');render(b.getAttribute('data-p'));});
+render('balanced');
+</script></body></html>
