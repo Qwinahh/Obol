@@ -132,4 +132,42 @@ function measure(core, opts) {
   };
 }
 
-module.exports = { measure, newestTranscript, projectName };
+/* Recent sessions you could attach to, newest first. */
+function listSessions(limit) {
+  let all = [];
+  for (const r of appDataRoots()) findTranscripts(r, 6, all);
+  all.sort((a, b) => b.mtime - a.mtime);
+  return all.slice(0, limit || 12).map((t) => ({
+    path: t.path,
+    project: projectName(t.path),
+    surface: /local-agent-mode-sessions/.test(t.path) ? "Claude app" : "Claude Code",
+    mtime: t.mtime,
+    sizeKB: Math.round(t.size / 1024),
+  }));
+}
+
+/* Measure one specific transcript, regardless of age. */
+function measureFile(core, file) {
+  let st = null;
+  try { st = fs.statSync(file); } catch (e) { return null; }
+  const totals = readIncrement(file, st.size);
+  if (!totals.turns) return null;
+  const usage = {
+    found: true, sessions: 1,
+    input: totals.input, output: totals.output, cacheWrite: totals.cacheWrite, cacheRead: totals.cacheRead,
+    byModel: [{ model: totals.model || "claude-sonnet", input: totals.input, output: totals.output, cacheWrite: totals.cacheWrite, cacheRead: totals.cacheRead, costUSD: 0 }],
+  };
+  let savedUSD = 0, savedPct = 0, spendUSD = 0;
+  try {
+    const pr = core.proof(usage);
+    if (pr && pr.cache) { savedUSD = pr.cache.savedUSD || 0; savedPct = pr.cache.savedPct || 0; }
+    if (core.costOf) spendUSD = core.costOf({ input: totals.input, output: totals.output, cacheWrite: totals.cacheWrite, cacheRead: totals.cacheRead }, totals.model || "claude-sonnet") || 0;
+  } catch (e) {}
+  return {
+    file, project: projectName(file), fresh: (Date.now() - st.mtimeMs) < 20 * 60 * 1000,
+    savedUSD, savedPct, spendUSD, turns: totals.turns, model: totals.model,
+    tokens: totals.input + totals.output + totals.cacheWrite + totals.cacheRead,
+  };
+}
+
+module.exports = { measure, measureFile, listSessions, newestTranscript, projectName };

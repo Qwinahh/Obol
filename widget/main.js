@@ -26,6 +26,7 @@ const tail = (() => { try { return require(pick("tail.js", "widget/tail.js")); }
 const est = (() => { try { return require(pick("estimate.js", "widget/estimate.js")); } catch (e) { return null; } })();
 const cls = (() => { try { return require(pick("classify.js", "mcp/classify.js")); } catch (e) { return null; } })();
 const PLAN = (() => { try { return fs.readFileSync(pick("plan.html", "widget/plan.html"), "utf8"); } catch (e) { return ""; } })();
+const SESSION_UI = (() => { try { return fs.readFileSync(pick("session.html", "widget/session.html"), "utf8"); } catch (e) { return ""; } })();
 
 const fmt = (n) => (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const LEDGER = path.join(os.homedir(), ".obol", "ledger.json");
@@ -51,6 +52,9 @@ function updateLedger(usage) {
   if (dirty) writeLedger(L);
   return L.allTime || 0;
 }
+const PIN_FILE = path.join(os.homedir(), ".obol", "pin.json");
+function readPin() { try { return JSON.parse(fs.readFileSync(PIN_FILE, "utf8")).file || ""; } catch (e) { return ""; } }
+function writePin(file) { try { fs.mkdirSync(path.dirname(PIN_FILE), { recursive: true }); fs.writeFileSync(PIN_FILE, JSON.stringify({ file: file || "" })); } catch (e) {} }
 const SESSION_FILE = path.join(os.homedir(), ".obol", "session.json");
 const MODE_FILE = path.join(os.homedir(), ".obol", "mode.json");
 function readSession() { try { return JSON.parse(fs.readFileSync(SESSION_FILE, "utf8")); } catch (e) { return null; } }
@@ -82,8 +86,12 @@ function writeMode(mode) { try { fs.mkdirSync(path.dirname(MODE_FILE), { recursi
 function computeTailed() {
   if (!tail) return null;
   let m = null;
-  try { m = tail.measure(core, { maxAgeMs: 20 * 60 * 1000 }); } catch (e) { return null; }
-  if (!m || !m.fresh) return null;
+  const pinned = readPin();
+  try {
+    m = pinned && tail.measureFile ? tail.measureFile(core, pinned) : tail.measure(core, { maxAgeMs: 20 * 60 * 1000 });
+  } catch (e) { return null; }
+  if (!m) return null;
+  if (!pinned && !m.fresh) return null;   // auto mode only follows a live session
   const sess = liveSession();           // hook state, when Claude Code is driving
   const ledger = creditLedger(m.file, m.savedUSD);
   return {
@@ -148,14 +156,25 @@ function buildHtml(obol) {
   // make the card draggable (interactive bits stay clickable), add a close dot, wire live IPC refresh
   const inject =
     '<style>'+'html,body{height:auto;background:#131119;overflow:hidden;-webkit-user-select:none;user-select:none;}'+'.wrap{padding:0 !important;}'+'.card{max-width:none !important;width:100%;border:none !important;border-radius:0 !important;-webkit-app-region:drag;}'+'#bg{border-radius:0 !important;}'+'button,.tab,.ddbar,.tab .i,#obx,a,input,.obSeg,#obShareCanvas,#obShareOv,#obShareOv *{-webkit-app-region:no-drag;}'+'</style>' +
-    '<div id="obx" title="Close" style="position:fixed;top:9px;right:11px;z-index:99;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.08);color:#cbc9d6;border:0.5px solid rgba(255,255,255,0.22);font-size:13px;line-height:20px;text-align:center;cursor:pointer;font-family:Poppins,sans-serif;">×</div>' +
+    '<style>' +
+    '#obTop{position:fixed;top:8px;right:10px;z-index:99;display:flex;align-items:center;gap:6px;-webkit-app-region:no-drag;}' +
+    '.obTopBtn{height:24px;padding:0 11px;border-radius:7px;background:rgba(255,255,255,0.08);color:#efedf6;border:0.5px solid rgba(255,255,255,0.22);font-family:Poppins,sans-serif;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}' +
+    '.obTopBtn:hover{background:rgba(255,255,255,0.15);}' +
+    '#obx{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,0.08);color:#cbc9d6;border:0.5px solid rgba(255,255,255,0.22);font-size:13px;line-height:22px;text-align:center;cursor:pointer;font-family:Poppins,sans-serif;}' +
+    '#obx:hover{background:rgba(255,255,255,0.15);color:#fff;}' +
+    '</style>' +
+    '<div id="obTop"><span id="obSlotSes"></span><span id="obSlotPlan"></span><span id="obSlotShare"></span><div id="obx" title="Close">×</div></div>' +
     '<script>(function(){var x=document.getElementById("obx");if(x)x.onclick=function(){try{require("electron").ipcRenderer.send("obol-close");}catch(e){window.close();}};' +
     'try{var ipc=require("electron").ipcRenderer;ipc.on("obol",function(e,o){try{window.__obolApply(o);}catch(_){}});}catch(e){}' +
     'var rep=function(){try{var h=Math.ceil(document.querySelector(".wrap").getBoundingClientRect().height);require("electron").ipcRenderer.send("obol-size",h);}catch(_){}};' +
     'try{new ResizeObserver(rep).observe(document.querySelector(".wrap"));}catch(_){}' +
     'window.__obolSetMode=function(m){try{require("electron").ipcRenderer.send("obol-mode",m);}catch(_){}}; ' +
-    'window.addEventListener("load",rep);setTimeout(rep,80);setTimeout(rep,500);})();</script>';
-  html = html.replace("</body>", function () { return inject + SHARE + PLAN + "</body>"; });
+    'window.addEventListener("load",rep);setTimeout(rep,80);setTimeout(rep,500);' +
+    'setTimeout(function(){var t=document.getElementById("obTop");var p=document.getElementById("obPlanBtn"),s2=document.getElementById("obShareBtn");' +
+    'var s3=document.getElementById("obSesBtn");' +
+    'if(t&&s3)document.getElementById("obSlotSes").appendChild(s3); if(t&&p)document.getElementById("obSlotPlan").appendChild(p); if(t&&s2)document.getElementById("obSlotShare").appendChild(s2);},60);' +
+    '})();</script>';
+  html = html.replace("</body>", function () { return inject + SHARE + PLAN + SESSION_UI + "</body>"; });
   return html;
 }
 
@@ -215,6 +234,13 @@ function debounce(fn, ms) { let t; return function () { clearTimeout(t); t = set
 
 ipcMain.on("obol-close", () => { if (win) win.close(); });
 ipcMain.on("obol-mode", (e, mode) => { writeMode(mode); refresh(false); });
+ipcMain.handle("obol-sessions", () => {
+  try {
+    const list = tail && tail.listSessions ? tail.listSessions(12) : [];
+    return { pinned: readPin(), sessions: list };
+  } catch (e) { return { pinned: "", sessions: [] }; }
+});
+ipcMain.on("obol-pin", (e, file) => { writePin(file); refresh(true); });
 /* Price the next turn locally: uses this session's real context as the baseline. */
 ipcMain.handle("obol-estimate", (e, text) => {
   if (!est || !cls) return null;

@@ -1,0 +1,58 @@
+<button id="obSesBtn" class="obTopBtn" title="Choose which session Obol watches">Session</button>
+
+<div id="obSesOv" style="position:fixed;inset:0;z-index:210;display:none;background:rgba(5,4,9,0.86);align-items:center;justify-content:center;padding:16px;-webkit-app-region:no-drag;">
+  <div style="width:330px;max-width:96%;font-family:Poppins,sans-serif;background:#17151f;border:0.5px solid rgba(255,255,255,0.13);border-radius:14px;padding:15px;box-shadow:0 18px 55px rgba(0,0,0,0.6);">
+    <div style="font-size:13px;font-weight:600;margin-bottom:3px;">Watch a session</div>
+    <div style="font-size:11.5px;color:#928f9d;margin-bottom:11px;line-height:1.45;">Pick the chat Obol should measure, or let it follow whichever one you're actively using.</div>
+    <div id="obSesList" style="max-height:250px;overflow-y:auto;margin-bottom:11px;"></div>
+    <div style="display:flex;gap:6px;">
+      <button id="obSesAuto" style="flex:1;">Follow active</button>
+      <button id="obSesClose" style="width:auto;padding:0 14px;">Close</button>
+    </div>
+  </div>
+</div>
+
+<style>
+#obSesAuto,#obSesClose{font-family:Poppins,sans-serif;font-size:12px;font-weight:500;height:34px;border:0.5px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.04);color:#efedf6;border-radius:8px;cursor:pointer;}
+#obSesAuto:hover,#obSesClose:hover{background:rgba(255,255,255,0.09);}
+.obSes{width:100%;text-align:left;background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.10);border-radius:9px;padding:9px 11px;margin-bottom:7px;cursor:pointer;color:#efedf6;font-family:Poppins,sans-serif;}
+.obSes:hover{background:rgba(255,255,255,0.09);}
+.obSes.on{border-color:rgba(53,212,155,0.55);background:rgba(53,212,155,0.10);}
+.obSes .t{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;gap:8px;}
+.obSes .s{font-size:10.5px;color:#928f9d;margin-top:2px;}
+.obSesEmpty{font-size:12px;color:#928f9d;padding:6px 0;}
+#obSesList::-webkit-scrollbar{width:8px;}
+#obSesList::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.16);border-radius:4px;}
+</style>
+
+<script>
+(function(){
+  function ipc(){ try{ return require("electron").ipcRenderer; }catch(e){ return null; } }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){return ({"&":"&amp;","<":"&lt;",">":"&gt;"})[c];}); }
+  function ago(ms){ var m=Math.round((Date.now()-ms)/60000); if(m<1)return "just now"; if(m<60)return m+"m ago"; var h=Math.round(m/60); if(h<24)return h+"h ago"; return Math.round(h/24)+"d ago"; }
+
+  function load(){
+    var i=ipc(); if(!i) return;
+    i.invoke("obol-sessions").then(function(r){
+      var el=document.getElementById("obSesList"); if(!el||!r) return;
+      if(!r.sessions.length){ el.innerHTML='<div class="obSesEmpty">No Claude sessions found yet. Start a chat and it will appear here.</div>'; return; }
+      el.innerHTML=r.sessions.map(function(s){
+        var on=r.pinned===s.path;
+        return '<button class="obSes'+(on?" on":"")+'" data-f="'+esc(s.path)+'">'+
+          '<div class="t"><span>'+esc(s.project)+'</span><span style="color:#928f9d;font-weight:400">'+ago(s.mtime)+'</span></div>'+
+          '<div class="s">'+esc(s.surface)+' · '+s.sizeKB.toLocaleString()+' KB'+(on?' · watching':'')+'</div>'+
+        '</button>';
+      }).join("");
+      Array.prototype.forEach.call(el.querySelectorAll(".obSes"),function(b){
+        b.onclick=function(){ var i2=ipc(); if(i2) i2.send("obol-pin", b.getAttribute("data-f")); document.getElementById("obSesOv").style.display="none"; };
+      });
+    }).catch(function(){});
+  }
+
+  var b=document.getElementById("obSesBtn");
+  if(b) b.onclick=function(){ document.getElementById("obSesOv").style.display="flex"; load(); };
+  var c=document.getElementById("obSesClose"); if(c) c.onclick=function(){ document.getElementById("obSesOv").style.display="none"; };
+  var a=document.getElementById("obSesAuto");
+  if(a) a.onclick=function(){ var i=ipc(); if(i) i.send("obol-pin",""); document.getElementById("obSesOv").style.display="none"; };
+})();
+</script>

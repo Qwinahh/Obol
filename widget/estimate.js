@@ -164,6 +164,12 @@ function estimate(core, opts) {
     outputTokens: expectedOutput(cls, chosen) + extraOut,
     extraInputTokens: extraIn, extraOutputTokens: extraOut,
     searchFee, rounds, roundsLow: rr.low, roundsHigh: rr.high, openEnded: rr.open,
+    contextCost: (function () {
+      try {
+        const rr2 = core.ratesFor((models[0] && models[0].id) || "claude-sonnet-5", when);
+        return (ctxBase * rounds * rr2.cacheRead) / 1e6;
+      } catch (e) { return 0; }
+    })(),
     factors: found.map((f) => ({ label: f.label, tokens: f.tokens, kind: f.kind, tip: f.tip })),
     habits: opts.session ? factors.habits(opts.session) : [],
     models, byMode, refModel: refId,

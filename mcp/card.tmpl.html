@@ -17,7 +17,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
   border-radius:14px; padding:18px 20px;}
 #bg{position:absolute; inset:0; width:100%; height:100%; border-radius:14px; pointer-events:none;}
 .in{position:relative;}
-.hd{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+.hd{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-right:128px; min-height:26px;}
 .brand{display:flex; align-items:baseline; gap:0;}
 .brand .o{width:20px; height:20px; object-fit:contain; position:relative; top:1px; margin-right:1px;}
 .brand .wm{font-weight:700; font-size:26px; letter-spacing:-0.04em; color:#fff; line-height:1;}
@@ -47,8 +47,9 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
   border:0.5px solid rgba(255,255,255,0.14); background:transparent; color:#efedf6; border-radius:8px; cursor:pointer;}
 .tab:hover{background:rgba(255,255,255,0.06);}
 .tab.on{border-color:rgba(255,255,255,0.55); background:rgba(255,255,255,0.14); color:#ffffff;}
-.tab .i{display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%;
-  border:1px solid currentColor; font-size:9px; font-style:italic; font-weight:700; line-height:1; opacity:0.55; cursor:help;}
+.tab .i{display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%;
+  border:1px solid currentColor; font-family:Georgia,'Times New Roman',serif; font-size:10px; font-style:italic;
+  font-weight:700; line-height:15px; text-align:center; padding-left:0.5px; opacity:0.5; cursor:help; flex:0 0 auto;}
 .tab .i:hover{opacity:1;}
 .tip{position:absolute; bottom:calc(100% + 8px); width:190px; background:#221f2b; border:0.5px solid rgba(255,255,255,0.18);
   border-radius:8px; padding:8px 10px; font-size:11px; font-weight:400; color:#cbc9d6; line-height:1.45; text-align:left;
