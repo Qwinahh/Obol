@@ -1,7 +1,7 @@
 // Public surface of the Obol core. Each step adds to this; surfaces import from here.
 export * from "./core/types";
 export { loadCatalog, autoApplyBreakdown } from "./core/catalog";
-export { ratesFor, costOf } from "./core/pricing";
+export { ratesFor, costOf, modelFor, labelFor, allModels, currentModels, tokenizerFactor, extras } from "./core/pricing";
 export { readUsage } from "./core/usage";
 export { diagnose } from "./core/diagnose";
 export { proof, measureCacheSavings } from "./core/proof";

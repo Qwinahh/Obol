@@ -1,0 +1,43 @@
+name: Release
+
+# Builds the Obol Live desktop app (.exe) and the Claude Desktop extension (.mcpb)
+# and attaches both to the GitHub Release, so users just download and run.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install + build core
+        run: |
+          npm ci || npm install
+          npm run build
+
+      - name: Pack Claude Desktop extension (.mcpb)
+        run: node mcp/build.js
+
+      - name: Build the desktop widget (installer + portable)
+        working-directory: widget
+        run: |
+          npm install
+          npm run dist
+
+      - name: Attach artifacts to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            obol.mcpb
+            widget/release/*.exe
+          generate_release_notes: true

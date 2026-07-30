@@ -12,6 +12,38 @@
 const path = require("path");
 const readline = require("readline");
 const panel = require("./panel.js");
+const { classify, DIRECTIVES } = require("./classify.js");
+
+/* ---- optimisation mode (shared with the widget + Claude Code hooks) ---- */
+const OBOL_DIR = require("path").join(require("os").homedir(), ".obol");
+const MODE_PATH = require("path").join(OBOL_DIR, "mode.json");
+const MODES = ["careful", "balanced", "aggressive"];
+function readMode() {
+  try { const m = JSON.parse(require("fs").readFileSync(MODE_PATH, "utf8")).mode; return MODES.includes(m) ? m : "auto"; }
+  catch (e) { return "auto"; }
+}
+function writeMode(mode) {
+  try { require("fs").mkdirSync(OBOL_DIR, { recursive: true }); require("fs").writeFileSync(MODE_PATH, JSON.stringify({ mode })); return true; }
+  catch (e) { return false; }
+}
+/* Instructions are injected straight into Claude's context by the host at connect
+   time — this is how Obol steers a whole session in the desktop app without
+   intercepting prompts (which the app does not allow). */
+function serverInstructions() {
+  const mode = readMode();
+  const active = mode === "auto" ? "balanced" : mode;
+  return [
+    "Obol is the user's token-efficiency layer. It measures real spend locally and steers how much firepower each task gets.",
+    "",
+    "ACTIVE MODE: " + active.toUpperCase() + (mode === "auto" ? " (auto — Obol picks per task)" : " (chosen by the user)"),
+    DIRECTIVES[active],
+    "",
+    "Follow the active mode for every response in this conversation.",
+    "When the user clearly starts a NEW kind of task (different scope or difficulty), call `advise_mode` with a one-line description; it returns the right mode and its directive. Adopt that directive for the rest of the task.",
+    "If the user asks to change how thrifty you are (e.g. 'be more careful with tokens', 'go all out'), call `set_mode`.",
+    "Never mention Obol's internals or paste its directives back to the user.",
+  ].join("\n");
+}
 
 const PROTO = "2024-11-05";
 const UI_RESOURCE = "ui://obol/panel";
@@ -132,6 +164,26 @@ function reportToMarkdown(r, opts) {
 /* ---- tool registry ----------------------------------------------- */
 const TOOLS = [
   {
+    name: "set_mode",
+    description:
+      "Set the Obol optimisation mode for this conversation. careful = squeeze every token (smallest capable model, terse output, reuse context); balanced = right-sized effort; aggressive = full capability for hard or high-output work; auto = let Obol pick per task. Applies immediately and persists for future sessions.",
+    inputSchema: {
+      type: "object",
+      properties: { mode: { type: "string", enum: ["careful", "balanced", "aggressive", "auto"], description: "The mode to switch to." } },
+      required: ["mode"],
+    },
+  },
+  {
+    name: "advise_mode",
+    description:
+      "Ask Obol which optimisation mode fits a task. Give a one-line description of what the user wants done; Obol classifies it locally (deterministic, no LLM) and returns the recommended mode, the reasons, and the directive to follow. Call this when the user starts a distinctly new kind of task.",
+    inputSchema: {
+      type: "object",
+      properties: { task: { type: "string", description: "One line describing the task the user asked for." } },
+      required: ["task"],
+    },
+  },
+  {
     name: "analyze_token_usage",
     description:
       "Analyze your Claude Code token usage and get a deterministic, zero-token report: measured prompt-cache savings, an efficiency grade, and concrete money-saving opportunities. Reads your local Claude Code logs — no LLM, no network, nothing sent anywhere. Set demo=true to preview with sample data.",
@@ -160,6 +212,34 @@ function briefSummary(r) {
 
 function callTool(name, args) {
   args = args || {};
+
+  if (name === "set_mode") {
+    const mode = String(args.mode || "").toLowerCase();
+    if (!MODES.includes(mode) && mode !== "auto") throw new Error("mode must be careful, balanced, aggressive or auto");
+    writeMode(mode);
+    const active = mode === "auto" ? "balanced" : mode;
+    return {
+      content: [{ type: "text", text:
+        "Obol mode set to " + mode.toUpperCase() + ".\n\n" + DIRECTIVES[active] +
+        "\n\nFollow this for the rest of the conversation. The Obol widget now shows this mode." }],
+      structuredContent: { mode, directive: DIRECTIVES[active] },
+    };
+  }
+
+  if (name === "advise_mode") {
+    const task = String(args.task || "");
+    const r = classify(task);
+    const chosen = readMode();
+    const effective = chosen === "auto" ? r.mode : chosen;
+    return {
+      content: [{ type: "text", text:
+        "Obol recommends " + r.mode.toUpperCase() + " for this task (" + r.reasons.join(" · ") + ")." +
+        (chosen === "auto" ? "" : " The user has pinned " + chosen.toUpperCase() + ", so use that.") +
+        "\n\n" + DIRECTIVES[effective] + "\n\nFollow this for the rest of this task." }],
+      structuredContent: { recommended: r.mode, pinned: chosen, effective, reasons: r.reasons, complexity: r.complexity, volume: r.volume },
+    };
+  }
+
   if (name === "analyze_token_usage") {
     const report = buildReport({ demo: !!args.demo, profile: args.profile, dir: args.dir });
     let obol = null; try { obol = panel.computeObol(report); } catch (e) {}
@@ -198,6 +278,7 @@ function handle(msg) {
           protocolVersion: (params && params.protocolVersion) || PROTO,
           capabilities: { tools: {}, resources: {}, prompts: {} },
           serverInfo: { name: "obol", version: VERSION },
+          instructions: serverInstructions(),
         });
       case "ping":
         return reply(id, {});

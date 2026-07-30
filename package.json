@@ -1,21 +1,52 @@
 {
   "name": "obol",
   "version": "0.0.1",
-  "description": "Obol — measure, diagnose, and cut your LLM token spend. Deterministic, local, free.",
+  "description": "Obol \u2014 measure, diagnose, and cut your LLM token spend. Deterministic, local, free.",
   "type": "commonjs",
-  "bin": { "obol": "dist/cli.js" },
+  "bin": {
+    "obol": "dist/cli.js"
+  },
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "postbuild": "node scripts/bundle-plugin.js",
     "bundle": "node scripts/bundle-plugin.js",
     "start": "node dist/cli.js",
-    "dev": "tsc && node dist/cli.js"
+    "dev": "tsc && node dist/cli.js",
+    "prepublishOnly": "npm run build",
+    "hooks:test": "node scripts/test-hooks.mjs"
   },
-  "keywords": ["llm", "tokens", "claude", "cost", "optimization"],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "tokens",
+    "cost",
+    "optimization",
+    "prompt-caching",
+    "llm",
+    "analyzer"
+  ],
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.4.0",
     "@types/node": "^20.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Qwinahh/Obol.git"
+  },
+  "homepage": "https://github.com/Qwinahh/Obol",
+  "bugs": {
+    "url": "https://github.com/Qwinahh/Obol/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist/",
+    "data/",
+    "plugin/",
+    "README.md",
+    "LICENSE"
+  ]
 }

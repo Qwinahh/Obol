@@ -1,12 +1,66 @@
 {
-  "version": "0.1.0",
-  "updated": "2026-06",
+  "version": "0.2.0",
+  "updated": "2026-07-29",
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
   "unit": "USD per million tokens",
-  "note": "Estimates. Matched by substring of the model id. Cache write = 5-min rate (1.25x input); cache read = 0.1x input.",
-  "models": [
-    { "match": "opus",   "input": 5, "output": 25, "cacheWrite": 6.25, "cacheRead": 0.5 },
-    { "match": "sonnet", "input": 3, "output": 15, "cacheWrite": 3.75, "cacheRead": 0.3 },
-    { "match": "haiku",  "input": 1, "output": 5,  "cacheWrite": 1.25, "cacheRead": 0.1 }
+  "notes": [
+    "Cache writes default to the 5-minute rate (1.25x input). 1-hour writes are 2x input.",
+    "Cache reads are 0.1x input.",
+    "Claude 4.7+ and Mythos use a newer tokenizer that yields roughly 30% more tokens for the same text.",
+    "Sonnet 5 has introductory pricing through 2026-08-31, then standard rates apply."
   ],
-  "default": { "input": 3, "output": 15, "cacheWrite": 3.75, "cacheRead": 0.3 }
+  "models": [
+    { "id": "claude-fable-5",   "label": "Fable 5",   "family": "fable",  "match": ["fable-5", "fable5"],
+      "input": 10, "output": 50, "cacheWrite": 12.5, "cacheWrite1h": 20, "cacheRead": 1, "tokenizer": "v2", "status": "current" },
+    { "id": "claude-mythos-5",  "label": "Mythos 5",  "family": "mythos", "match": ["mythos-5", "mythos5"],
+      "input": 10, "output": 50, "cacheWrite": 12.5, "cacheWrite1h": 20, "cacheRead": 1, "tokenizer": "v2", "status": "limited" },
+
+    { "id": "claude-opus-5",    "label": "Opus 5",    "family": "opus",   "match": ["opus-5", "opus5"],
+      "input": 5, "output": 25, "cacheWrite": 6.25, "cacheWrite1h": 10, "cacheRead": 0.5, "tokenizer": "v2", "status": "current",
+      "fastMode": { "input": 10, "output": 50 } },
+    { "id": "claude-opus-4-8",  "label": "Opus 4.8",  "family": "opus",   "match": ["opus-4-8", "opus-4.8"],
+      "input": 5, "output": 25, "cacheWrite": 6.25, "cacheWrite1h": 10, "cacheRead": 0.5, "tokenizer": "v2", "status": "current",
+      "fastMode": { "input": 10, "output": 50 } },
+    { "id": "claude-opus-4-7",  "label": "Opus 4.7",  "family": "opus",   "match": ["opus-4-7", "opus-4.7"],
+      "input": 5, "output": 25, "cacheWrite": 6.25, "cacheWrite1h": 10, "cacheRead": 0.5, "tokenizer": "v2", "status": "current" },
+    { "id": "claude-opus-4-6",  "label": "Opus 4.6",  "family": "opus",   "match": ["opus-4-6", "opus-4.6"],
+      "input": 5, "output": 25, "cacheWrite": 6.25, "cacheWrite1h": 10, "cacheRead": 0.5, "tokenizer": "v1", "status": "current" },
+    { "id": "claude-opus-4-5",  "label": "Opus 4.5",  "family": "opus",   "match": ["opus-4-5", "opus-4.5"],
+      "input": 5, "output": 25, "cacheWrite": 6.25, "cacheWrite1h": 10, "cacheRead": 0.5, "tokenizer": "v1", "status": "current" },
+    { "id": "claude-opus-4-1",  "label": "Opus 4.1",  "family": "opus",   "match": ["opus-4-1", "opus-4.1"],
+      "input": 15, "output": 75, "cacheWrite": 18.75, "cacheWrite1h": 30, "cacheRead": 1.5, "tokenizer": "v1", "status": "deprecated" },
+    { "id": "claude-opus-4",    "label": "Opus 4",    "family": "opus",   "match": ["opus-4"],
+      "input": 15, "output": 75, "cacheWrite": 18.75, "cacheWrite1h": 30, "cacheRead": 1.5, "tokenizer": "v1", "status": "retired" },
+
+    { "id": "claude-sonnet-5",  "label": "Sonnet 5",  "family": "sonnet", "match": ["sonnet-5", "sonnet5"],
+      "input": 2, "output": 10, "cacheWrite": 2.5, "cacheWrite1h": 4, "cacheRead": 0.2, "tokenizer": "v2", "status": "current",
+      "introUntil": "2026-08-31",
+      "standard": { "input": 3, "output": 15, "cacheWrite": 3.75, "cacheWrite1h": 6, "cacheRead": 0.3 } },
+    { "id": "claude-sonnet-4-6","label": "Sonnet 4.6","family": "sonnet", "match": ["sonnet-4-6", "sonnet-4.6"],
+      "input": 3, "output": 15, "cacheWrite": 3.75, "cacheWrite1h": 6, "cacheRead": 0.3, "tokenizer": "v1", "status": "current" },
+    { "id": "claude-sonnet-4-5","label": "Sonnet 4.5","family": "sonnet", "match": ["sonnet-4-5", "sonnet-4.5"],
+      "input": 3, "output": 15, "cacheWrite": 3.75, "cacheWrite1h": 6, "cacheRead": 0.3, "tokenizer": "v1", "status": "current" },
+    { "id": "claude-sonnet-4",  "label": "Sonnet 4",  "family": "sonnet", "match": ["sonnet-4"],
+      "input": 3, "output": 15, "cacheWrite": 3.75, "cacheWrite1h": 6, "cacheRead": 0.3, "tokenizer": "v1", "status": "retired" },
+
+    { "id": "claude-haiku-4-5", "label": "Haiku 4.5", "family": "haiku",  "match": ["haiku-4-5", "haiku-4.5"],
+      "input": 1, "output": 5, "cacheWrite": 1.25, "cacheWrite1h": 2, "cacheRead": 0.1, "tokenizer": "v1", "status": "current" },
+    { "id": "claude-haiku-3-5", "label": "Haiku 3.5", "family": "haiku",  "match": ["haiku-3-5", "haiku-3.5"],
+      "input": 0.8, "output": 4, "cacheWrite": 1, "cacheWrite1h": 1.6, "cacheRead": 0.08, "tokenizer": "v1", "status": "retired" }
+  ],
+  "default": "claude-sonnet-5",
+  "extras": {
+    "webSearchPer1000": 10,
+    "webFetchPerRequest": 0,
+    "batchDiscount": 0.5,
+    "usResidencyMultiplier": 1.1,
+    "toolSystemPromptTokens": {
+      "claude-opus-5": 286, "claude-opus-4-8": 290, "claude-opus-4-7": 675,
+      "claude-opus-4-6": 497, "claude-opus-4-5": 496,
+      "claude-sonnet-5": 354, "claude-sonnet-4-6": 497, "claude-sonnet-4-5": 496,
+      "claude-haiku-4-5": 496
+    },
+    "toolDefinitionTokens": { "bash": 325, "bashLegacy": 244, "textEditor": 700, "computerUse": 735 },
+    "webFetchTokens": { "averagePage": 2500, "largeDocPage": 25000, "researchPdf": 125000 }
+  }
 }

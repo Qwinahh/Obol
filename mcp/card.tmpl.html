@@ -122,7 +122,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
       </div>
 
       <button class="ddbar" id="ob-dd" aria-expanded="false">
-        <span>Opportunities <span class="sum" id="ob-ddsum"></span></span>
+        <span>Obol mode <span class="sum" id="ob-ddsum"></span></span>
         <span class="chev">▾</span>
       </button>
       <div class="ddb" id="ob-ddbody">
@@ -161,6 +161,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
   var O = window.OBOL || {};
   var BANDS = ["D","C","B","A","S"];
   var SCALE = ["#ff3b30","#ff9500","#34d94a","#2e9bff","#e040fb"];
+  function setSegments(neu){ var sg=document.querySelectorAll('.gseg'); for(var i=0;i<sg.length;i++){ sg[i].style.background = neu ? 'rgba(255,255,255,0.20)' : (SCALE[i]||'#fff'); } }
   function hexRgb(h){ h=h.replace('#',''); return [parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)]; }
   function glowTint(rgb){ return [rgb[0]*0.62+150*0.38, rgb[1]*0.62+150*0.38, rgb[2]*0.62+150*0.38]; }
   function gradeFor(score){
@@ -175,6 +176,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
   function set(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
 
   function paint(){
+    var neutral = O.neutral === true;
     var connected = O.connected !== false;
     var score = O.score!=null ? O.score : 0;
     document.getElementById('ob-amt').innerHTML = '<span class="s">$</span><span class="n">'+esc(O.measured!=null?O.measured:"0.00")+'</span>';
@@ -183,11 +185,18 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
     set('ob-spend', '$'+(O.spend!=null?O.spend:"0.00"));
     document.getElementById('ob-alltime').innerHTML = money(O.allTime!=null?O.allTime:"0.00");
     var st = document.getElementById('ob-status');
-    if (st) st.innerHTML = connected ? ('<span class="dot"></span>' + (O.latestFile ? ('Latest · ' + esc(O.latestFile)) : 'Reading your Claude Code logs')) : '';
     var gEl = document.getElementById('ob-gv');
     var mk = document.getElementById('ob-mk');
     var track = document.querySelector('.gtrack');
-    if (connected) {
+    if (neutral) {
+      setSegments(true);
+      gEl.textContent = 'neutral'; gEl.style.color = '#bdbbc8';
+      mk.style.display = 'none';
+      if (track) track.style.opacity = '1';
+      window.__obolTint = [220,224,235];
+      if (st) st.innerHTML = '<span class="dot" style="background:#bdbbc8"></span>Idle · run obol analyze in a session';
+    } else if (connected) {
+      setSegments(false);
       var g = gradeFor(score);
       gEl.textContent = g.label; gEl.style.color = g.color;
       mk.style.display = 'block';
@@ -195,11 +204,14 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
       mk.style.left = pos + "%"; mk.style.transform = "translateX(-" + (pos/100*4) + "px)";
       if (track) track.style.opacity = '1';
       window.__obolTint = glowTint(hexRgb(g.color));
+      if (st) st.innerHTML = '<span class="dot"></span>' + (O.live ? ('Optimising · ' + esc(O.latestFile || 'session') + (O.mode ? '' : '')) : (O.latestFile ? ('Latest · ' + esc(O.latestFile)) : 'Connected'));
     } else {
+      setSegments(true);
       gEl.textContent = 'not connected'; gEl.style.color = '#928f9d';
       mk.style.display = 'none';
-      if (track) track.style.opacity = '0.35';
+      if (track) track.style.opacity = '0.5';
       window.__obolTint = [120,120,138];
+      if (st) st.innerHTML = '';
     }
   }
 
@@ -221,13 +233,23 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ b.classList.toggle('on', b.getAttribute('data-p')===p); });
     var el = document.getElementById('ob-finds'), fs = d.finds || [];
     var sum = document.getElementById('ob-ddsum');
+    if (O.recommended) {
+      var same = O.recommended === p;
+      var why = (O.reasons && O.reasons.length) ? O.reasons.join(' · ') : 'based on this prompt';
+      if (sum) sum.textContent = O.auto ? ('· auto → ' + O.recommended) : ('· suggests ' + O.recommended);
+      el.innerHTML = '<div class="lead">Obol suggests <b style="color:#fff">' + esc(O.recommended) + '</b>' + (O.auto ? ' (auto)' : '') + '</div>' +
+        '<div class="find"><div class="p">' + esc(why) + '</div>' +
+        (same ? '' : '<div class="id" style="margin-top:6px">You are on ' + esc(p) + '. Click ' + esc(O.recommended) + ' to switch.</div>') + '</div>';
+      return;
+    }
+    if (O.neutral) { if(sum) sum.textContent='· waiting for a session'; el.innerHTML='<div class="none">Pick a mode, then start a Claude Code session. Obol optimises each turn and your savings rise here.</div>'; return; }
     if (sum) sum.textContent = fs.length ? ("· up to " + (d.up||"$0.00") + " (" + fs.length + ")") : "· nothing to apply";
     if(!fs.length){ el.innerHTML = '<div class="none">Nothing to apply. Your usage already looks efficient'+(d.note?(" ("+esc(d.note)+")"):"")+'.</div>'; return; }
     var html = '<div class="lead">Up to '+money(d.up||"0.00")+(d.note?(" · "+esc(d.note)):"")+'</div>';
     html += fs.map(function(f){ return '<div class="find"><div class="top"><span class="nm">'+esc(f.nm)+'</span><span style="font-size:12px;font-weight:600;">'+money(f.amt)+'</span></div><div class="bar"><i style="width:'+(f.w||4)+'%"></i></div><div class="p">'+esc(f.p)+'</div><div class="id">'+esc(f.id)+'</div></div>'; }).join("");
     el.innerHTML = html;
   }
-  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ b.addEventListener('click', function(){ render(b.getAttribute('data-p')); var ddb=document.getElementById('ob-ddbody'),dd=document.getElementById('ob-dd'); if(ddb&&!ddb.classList.contains('open')){ddb.classList.add('open');if(dd){dd.classList.add('open');dd.setAttribute('aria-expanded','true');}} }); });
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ b.addEventListener('click', function(){ var m=b.getAttribute('data-p'); if(window.__obolSetMode) window.__obolSetMode(m); render(m); var ddb=document.getElementById('ob-ddbody'),dd=document.getElementById('ob-dd'); if(ddb&&!ddb.classList.contains('open')){ddb.classList.add('open');if(dd){dd.classList.add('open');dd.setAttribute('aria-expanded','true');}} }); });
   paint(); render(active);
 
   window.__obolApply = function(next){ if(!next) return; O = next; P = O.profiles || P; paint(); render(active); if (O.justAnalyzed) { var st=document.getElementById('ob-status'); if(st){ st.innerHTML='<span class="dot" style="background:#e040fb"></span>Analyzing '+esc(O.latestFile||'your logs')+'\u2026'; setTimeout(paint,1600); } } };

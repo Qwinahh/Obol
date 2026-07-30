@@ -26,6 +26,11 @@
     },
     "files": [
       "main.js",
+      "tail.js",
+      "factors.js",
+      "classify.js",
+      "plan.html",
+      "estimate.js",
       "panel.js",
       "card.html",
       "share.html",

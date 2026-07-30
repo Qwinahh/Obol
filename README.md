@@ -61,6 +61,39 @@ npm start -- --demo
 
 ---
 
+## Obol as you work (Claude Code)
+
+Obol's optimiser runs *during* your session, not after it. Install the plugin:
+
+```
+/plugin marketplace add Qwinahh/Obol
+/plugin install obol@obol
+```
+
+Restart Claude Code, and from then on every prompt you send goes through Obol
+first. It reads the prompt locally (no LLM, no tokens), decides how much
+firepower the task actually needs, and steers the turn accordingly.
+
+**Three modes.** Pick one in the widget, or leave it on auto and Obol chooses
+per prompt:
+
+| Mode | What it does | Good for |
+|---|---|---|
+| **Careful** | Squeeze every token: smallest capable model, terse output, reuse loaded context, no speculative exploration | Small edits, questions, cleanups |
+| **Balanced** | Right-sized effort — capable but not extravagant | Everyday work |
+| **Aggressive** | Full capability, room to reason and write completely | Refactors, debugging, building from scratch |
+
+Obol also tells you which one it *would* have picked and why ("involves deep
+reasoning · touches 3 files"), so the choice is yours.
+
+**Live savings.** After each turn Obol measures what prompt caching actually
+saved on that session and publishes it to the desktop widget, so the number
+rises while you work. Everything is local, in `~/.obol/`.
+
+**Staying out of the way.** Prefix any prompt with `~` and Obol skips that turn
+entirely. It never posts messages into your session — the only visible output is
+the widget beside it.
+
 ## Why it's different
 
 Most tools either **just show you a number** (ccusage, the usage monitors) or are

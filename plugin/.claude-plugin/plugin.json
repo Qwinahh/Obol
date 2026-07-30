@@ -1,11 +1,21 @@
 {
   "name": "obol",
   "displayName": "Obol",
-  "version": "0.1.0",
-  "description": "Measure, diagnose, and cut your Claude Code token spend — deterministic, local, free.",
-  "author": { "name": "Quin" },
+  "version": "0.2.0",
+  "description": "Cut your Claude Code token spend as you work \u2014 picks the right optimisation mode per prompt, then shows the money it saved. Deterministic, local, free.",
+  "author": {
+    "name": "Quin"
+  },
   "license": "MIT",
-  "keywords": ["tokens", "cost", "optimization", "caching", "usage"],
-  "commands": ["./commands/optimize.md"],
+  "keywords": [
+    "tokens",
+    "cost",
+    "optimization",
+    "caching",
+    "usage"
+  ],
+  "commands": [
+    "./commands/optimize.md"
+  ],
   "hooks": "./hooks/hooks.json"
 }

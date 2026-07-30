@@ -17,4 +17,5 @@ fs.mkdirSync(path.join(__dirname, "data"), { recursive: true });
 for (const f of ["pricing.json", "catalog.json"]) fs.copyFileSync(path.join(ROOT, "data", f), path.join(__dirname, "data", f));
 fs.copyFileSync(path.join(ROOT, "mcp", "card.html"), path.join(__dirname, "card.html"));
 fs.copyFileSync(path.join(ROOT, "mcp", "panel.js"), path.join(__dirname, "panel.js"));
-console.log("prepack: bundled dist/, data/, card.html, panel.js into widget/");
+fs.copyFileSync(path.join(ROOT, "mcp", "classify.js"), path.join(__dirname, "classify.js"));
+console.log("prepack: bundled dist/, data/, card.html, panel.js, classify.js into widget/");

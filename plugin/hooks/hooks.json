@@ -1,23 +1,25 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/router.mjs\"" }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Read",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/reread-guard.mjs\""
-          }
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/reread-guard.mjs\"" }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/circuit-breaker.mjs\""
-          }
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-tracker.mjs\"" },
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/circuit-breaker.mjs\"" }
         ]
       }
     ]

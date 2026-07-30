@@ -87,7 +87,9 @@ function computeObol(report) {
       const lt = ssx.slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0];
       const f = String((lt && lt.file) || "");
       const m = f.match(/projects[\/\\]([^\/\\]+)/);
-      latestFile = m ? m[1] : (f.split(/[\/\\]/).pop() || "").replace(/\.jsonl$/, "");
+      let raw = m ? m[1] : ((f.split(/[\/\\]/).pop() || "").replace(/\.jsonl$/, ""));
+      const parts = raw.split("-").filter(Boolean);
+      latestFile = parts.length ? parts[parts.length - 1] : raw;
     }
   } catch (e) {}
   const mp = moneyParts(allTimeNum);

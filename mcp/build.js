@@ -48,6 +48,7 @@ const files = [];
 files.push({ zip: "manifest.json", abs: path.join(__dirname, "manifest.json") });
 files.push({ zip: "server/server.js", abs: path.join(__dirname, "server.js") });
 files.push({ zip: "server/panel.js", abs: path.join(__dirname, "panel.js") });
+files.push({ zip: "server/classify.js", abs: path.join(__dirname, "classify.js") });
 files.push({ zip: "server/card.html", abs: path.join(__dirname, "card.html") });
 files.push({ zip: "server/bridge.bundle.js", abs: path.join(__dirname, "bridge.bundle.js") });
 walk(path.join(ROOT, "dist"), ROOT, files);
